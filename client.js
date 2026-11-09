@@ -452,6 +452,9 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
                 h('option', { value: 'literal' }, '直译'),
                 h('option', { value: 'plain' }, '通俗'),
               )),
+            this.hostMode === 'main' ? h('button', {
+              class: 'air-btn ghost', 'data-act': 'dock', title: '在右侧栏打开并返回对话',
+            }, '右侧栏') : null,
             h('button', { class: 'air-btn ghost', 'data-act': 'sidebar', title: '文档列表' }, icon('panel', 17)),
           ),
         )
@@ -525,6 +528,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
             else this.shell.classList.toggle('side-closed')
           }
           else if (target.dataset.act === 'workspace') this.switchSideTab('workspace')
+          else if (target.dataset.act === 'dock') this.dockToSidebar()
           else if (target.dataset.act === 'clear-recent') this.clearRecent()
           else if (target.dataset.mode) this.setMode(target.dataset.mode)
           else if (target.dataset.sideTab) this.switchSideTab(target.dataset.sideTab)
@@ -1375,6 +1379,32 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         }
       }
 
+      dockToSidebar() {
+        const sidebarRight = pluginCtx?.get?.('sidebarRight')
+        if (!sidebarRight) {
+          this.toast('右侧栏服务不可用，请刷新或重启 DSH', true)
+          return
+        }
+        const open = () => {
+          try {
+            if (this.doc) sidebarRight.openTab(SIDEBAR_TAB_KIND, { params: { docId: this.doc.id } })
+            else sidebarRight.openTab(SIDEBAR_TAB_KIND)
+          } catch (error) {
+            console.error('[ai-reader] dock failed', error)
+            window.alert?.(String(error?.message || error))
+          }
+        }
+        try {
+          // Rightbar is session-scoped. The main AI Reader panel replaces the
+          // conversation, so return to the Conversation first; its session surface
+          // must be mounted before the right sidebar accepts a tab.
+          pluginCtx.get?.('layout')?.selectPanel?.(null)
+          setTimeout(open, 320)
+        } catch (error) {
+          open()
+        }
+      }
+
       showLoading(title, subtitle) {
         this.hideLoading()
         const mask = h('div', { class: 'air-loading-mask' },
@@ -1477,7 +1507,6 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         if (!terminated) setPdf(found)
         return () => { terminated = true }
       }, [idsKey])
-      if (!pdf && hasInput) return null
       const open = async () => {
         if (!pdf) {
           try {
