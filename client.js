@@ -1414,7 +1414,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
       }
     }
 
-    const inject = ['slots', 'locale', 'layout', 'sidebarRight', 'sidebarRightTabs', 'conversation']
+    const inject = ['slots', 'locale', 'layout']
     const SIDEBAR_TAB_ID = 'dsh-ai-reader/sidebar'
     const SIDEBAR_TAB_KIND = 'ai-reader'
     let pluginCtx = null
@@ -1470,7 +1470,8 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         let terminated = false
         let found = null
         try {
-          const attachments = pluginCtx?.conversation?.resolveDraftAttachments?.(ids) || []
+          const conversation = pluginCtx?.get?.('conversation')
+          const attachments = conversation?.resolveDraftAttachments?.(ids) || []
           found = attachments.find((item) => item?.kind === 'file' && /\.pdf$/i.test(item.file?.name || '')) || null
         } catch { found = null }
         if (!terminated) setPdf(found)
@@ -1479,7 +1480,11 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
       if (!pdf && hasInput) return null
       const open = async () => {
         if (!pdf) {
-          try { pluginCtx.sidebarRight.openTab(SIDEBAR_TAB_KIND) } catch (error) { console.error('[ai-reader] open tab failed', error) }
+          try {
+            const tabs = pluginCtx?.get?.('sidebarRight')
+            if (!tabs) throw new Error('右侧栏服务不可用，请从左侧栏打开 AI 阅读')
+            tabs.openTab(SIDEBAR_TAB_KIND)
+          } catch (error) { console.error('[ai-reader] open tab failed', error) }
           return
         }
         setBusy(true)
@@ -1493,7 +1498,9 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
           })
           const value = await response.json().catch(() => null)
           if (!response.ok) throw new Error(value?.error || `上传失败（${response.status}）`)
-          pluginCtx.sidebarRight.openTab(SIDEBAR_TAB_KIND, { params: { docId: value.id } })
+          const sidebarRight = pluginCtx?.get?.('sidebarRight')
+          if (!sidebarRight) throw new Error('右侧栏服务不可用')
+          sidebarRight.openTab(SIDEBAR_TAB_KIND, { params: { docId: value.id } })
         } catch (error) {
           // Keep the composer usable; a toast in the sidebar would be hidden until it opens.
           console.error('[ai-reader] open attachment failed', error)
@@ -1543,13 +1550,19 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         name: 'main', key: 'ai-reader', locale: 'aiReader',
       }, AIReaderPanel)), 'dsh-ai-reader: main')
 
-      ctx.effect(() => ctx.sidebarRightTabs.register({
-        id: SIDEBAR_TAB_ID,
-        kind: SIDEBAR_TAB_KIND,
-        title: () => 'AI 阅读',
-        keepMounted: true,
-        guide: [{ id: 'reader', title: 'AI 阅读', description: '打开 PDF 做中英对照' }],
-      }), 'dsh-ai-reader: tab type')
+      ctx.inject(['sidebarRightTabs'], (child) => {
+        try {
+          return child.sidebarRightTabs.register({
+            id: SIDEBAR_TAB_ID,
+            kind: SIDEBAR_TAB_KIND,
+            title: () => 'AI 阅读',
+            keepMounted: true,
+            guide: [{ id: 'reader', title: 'AI 阅读', description: '打开 PDF 做中英对照' }],
+          })
+        } catch (error) {
+          console.warn('[ai-reader] sidebar tab type registration failed', error)
+        }
+      })
 
       ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
         name: 'sidebar.right.pane.tab', key: SIDEBAR_TAB_ID, locale: 'aiReader',

@@ -94,6 +94,8 @@ dsh plugin --profile desktop add https://github.com/River-mathematics/dsh-ai-rea
 
 刷新 DSH 页面，左侧栏出现「AI 阅读」。打开任意文本型 PDF，第 1 页会自动开始翻译。
 
+> 如果刷新后没有「AI 阅读」：先确认「插件」页里 `dsh-ai-reader` 是启用状态，然后重启一次 DSH。0.2.1 修复了可选右侧栏服务不可用时入口被整体回滚的问题。
+
 ## 使用
 
 ### 全屏阅读
