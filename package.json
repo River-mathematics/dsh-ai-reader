@@ -1,0 +1,61 @@
+{
+  "name": "dsh-ai-reader",
+  "version": "0.1.0",
+  "description": "AI 阅读：在 DeepSeek Harness 中打开 PDF，按页翻译，支持中英对照与沉浸式译文覆盖。",
+  "license": "MIT",
+  "author": "River-mathematics",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/River-mathematics/dsh-ai-reader.git"
+  },
+  "homepage": "https://github.com/River-mathematics/dsh-ai-reader#readme",
+  "bugs": {
+    "url": "https://github.com/River-mathematics/dsh-ai-reader/issues"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "pdf",
+    "translation",
+    "ai-reader",
+    "pymupdf"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "index.js",
+    "host.js",
+    "client.js",
+    "cordis.patch.yml",
+    "worker/main.py",
+    "worker/requirements.txt",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node --check index.js && node --check host.js && node --check client.js",
+    "check:worker": "python -m py_compile worker/main.py"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  }
+}

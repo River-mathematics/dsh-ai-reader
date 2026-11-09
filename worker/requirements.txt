@@ -1,0 +1,2 @@
+# Python dependencies for the PDF worker
+pymupdf>=1.24,<2
