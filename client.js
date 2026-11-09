@@ -94,6 +94,27 @@ body[data-ds-dark-theme] .air-root {
 .air-doc-name { font-size: 12.5px; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .air-doc-meta { color: var(--air-faint); font-size: 10.5px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .air-side-empty { color: var(--air-faint); font-size: 12px; padding: 18px 14px; line-height: 1.7; }
+.air-side-head .air-clear { margin-left: auto; height: 24px; padding: 0 7px; font-size: 10.5px; }
+.air-doc-row { position: relative; }
+.air-doc-row .air-row-more { position: absolute; right: 4px; top: 7px; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--air-faint); cursor: pointer; display: none; align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
+.air-doc-row:hover .air-row-more, .air-doc-row.on .air-row-more { display: inline-flex; }
+.air-doc-row .air-row-more:hover { background: var(--air-panel-2); color: var(--air-text); }
+.air-doc-row .air-doc-main { padding-right: 20px; }
+.air-menu { position: fixed; z-index: 80; min-width: 168px; background: var(--air-panel); border: 1px solid var(--air-border-strong); border-radius: 9px; box-shadow: 0 14px 40px rgba(0,0,0,.18); padding: 4px; }
+.air-menu button { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: var(--air-text); padding: 7px 9px; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.air-menu button:hover { background: var(--air-accent-soft); color: var(--air-accent); }
+.air-menu button.danger { color: #b33a3a; }
+.air-menu button.danger:hover { background: #fdf0f0; color: #b33a3a; }
+.air-menu .air-menu-note { color: var(--air-faint); font-size: 10px; padding: 4px 9px 6px; max-width: 220px; line-height: 1.5; }
+.air-dialog-mask { position: fixed; inset: 0; z-index: 95; background: rgba(20,18,15,.42); display: flex; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(3px); }
+.air-dialog { width: min(420px, 92vw); background: var(--air-panel); color: var(--air-text); border: 1px solid var(--air-border-strong); border-radius: 14px; box-shadow: 0 28px 80px rgba(0,0,0,.3); padding: 20px; }
+.air-dialog h3 { margin: 0 0 8px; font-size: 16px; }
+.air-dialog p { margin: 0 0 14px; color: var(--air-muted); font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; }
+.air-dialog input { width: 100%; height: 34px; border: 1px solid var(--air-border-strong); border-radius: 8px; background: var(--air-panel-2); color: var(--air-text); padding: 0 10px; font-size: 13px; outline: none; }
+.air-dialog input:focus { border-color: var(--air-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--air-accent) 15%, transparent); }
+.air-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.air-dialog-actions .danger { background: #b33a3a; border-color: #b33a3a; color: #fff; }
+.air-dialog-actions .danger:hover { color: #fff; filter: brightness(1.06); }
 .air-side-foot { border-top: 1px solid var(--air-border); padding: 11px 14px; color: var(--air-faint); font-size: 11px; line-height: 1.6; }
 .air-main { flex: 1; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; }
 .air-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 32px; }
@@ -130,7 +151,10 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
 .air-overlay.heading { background: rgba(255, 251, 238, .98); font-weight: 700; border-color: rgba(190, 160, 100, .5); }
 .air-overlay:hover { outline: 2px solid var(--air-accent); outline-offset: 1px; z-index: 5; }
 .air-blocks { min-width: 0; padding-bottom: 30px; }
-.air-block { padding: 9px 0 13px; border-bottom: 1px dashed color-mix(in srgb, var(--air-border) 80%, transparent); }
+.air-block { padding: 9px 0 13px; border-bottom: 1px dashed color-mix(in srgb, var(--air-border) 80%, transparent); position: relative; }
+.air-quote { position: absolute; right: 0; top: 8px; border: 1px solid var(--air-border); background: var(--air-panel); color: var(--air-faint); border-radius: 5px; font-size: 10px; line-height: 1; padding: 4px 6px; cursor: pointer; opacity: 0; transition: opacity .15s, color .15s, border-color .15s; }
+.air-block:hover .air-quote { opacity: 1; }
+.air-quote:hover { color: var(--air-accent); border-color: var(--air-accent); }
 .air-block:last-child { border-bottom: 0; }
 .air-block-orig { color: var(--air-muted); font-family: var(--air-serif); font-size: 13px; line-height: 1.62; }
 .air-block-zh { font-family: var(--air-serif); font-size: 15.5px; line-height: 1.82; margin-top: 6px; letter-spacing: .01em; white-space: pre-wrap; }
@@ -164,7 +188,58 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
 .air-outline { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 0 0; }
 .air-outline button { border: 1px solid var(--air-border); background: var(--air-panel); color: var(--air-muted); border-radius: 999px; padding: 4px 9px; font-size: 11px; cursor: pointer; }
 .air-outline button:hover { color: var(--air-accent); border-color: var(--air-accent); }
+.air-composer-btn { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 9px; border: 1px solid var(--air-border-strong); background: var(--air-panel); color: var(--air-text); border-radius: 8px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.air-composer-btn:hover { border-color: var(--air-accent); color: var(--air-accent); }
+.air-composer-btn:disabled { opacity: .6; cursor: default; }
+.air-doc-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.air-doc-model { display: inline-flex; align-items: center; gap: 5px; color: var(--air-faint); font-size: 11px; }
+.air-doc-select { height: 27px; border: 1px solid var(--air-border); border-radius: 6px; background: var(--air-panel); color: var(--air-text); font-size: 11px; padding: 0 5px; max-width: 155px; }
+.air-doc-tool { height: 27px; padding: 0 8px; font-size: 11px; }
+.air-doc-search-wrap { position: relative; display: inline-flex; align-items: center; gap: 5px; flex: 1; min-width: 150px; max-width: 330px; height: 28px; border: 1px solid var(--air-border); border-radius: 7px; background: var(--air-panel); padding: 0 7px; color: var(--air-faint); }
+.air-doc-search { border: 0; outline: none; background: transparent; color: var(--air-text); font-size: 11.5px; width: 100%; height: 100%; }
+.air-search-results { position: absolute; left: 0; top: calc(100% + 5px); width: min(430px, 80vw); max-height: 280px; overflow: auto; background: var(--air-panel); border: 1px solid var(--air-border-strong); border-radius: 9px; box-shadow: 0 17px 45px rgba(0,0,0,.2); z-index: 45; padding: 4px; }
+.air-search-results:empty { display: none; }
+.air-search-hit { width: 100%; display: flex; gap: 8px; text-align: left; border: 0; background: transparent; color: var(--air-text); border-radius: 6px; padding: 6px 7px; font-size: 11px; cursor: pointer; }
+.air-search-hit:hover { background: var(--air-accent-soft); }
+.air-search-page { flex: none; color: var(--air-accent); font-weight: 600; }
+.air-search-snippet { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--air-muted); }
+.air-search-empty { padding: 8px; color: var(--air-faint); font-size: 11px; }
+.air-zoom-btn { height: 24px; min-width: 24px; padding: 0 6px; font-size: 13px; line-height: 1; }
+.air-zoom-label { color: var(--air-faint); font-size: 10.5px; min-width: 32px; text-align: center; }
+.air-visual-wrap { overflow: auto; overscroll-behavior: contain; }
+.air-bbox-highlight { position: absolute; z-index: 3; display: none; pointer-events: none; border: 2px solid var(--air-accent); background: color-mix(in srgb, var(--air-accent) 10%, transparent); border-radius: 2px; }
+.air-block-hit { animation: airHit 3s ease; }
+@keyframes airHit { 0%, 72% { background: color-mix(in srgb, var(--air-accent) 12%, transparent); } 100% { background: transparent; } }
+.air-dialog-textarea { width: 100%; min-height: 150px; resize: vertical; border: 1px solid var(--air-border-strong); border-radius: 8px; background: var(--air-panel-2); color: var(--air-text); padding: 9px 10px; font: 12px/1.7 var(--air-sans); outline: none; }
+.air-dialog-textarea:focus { border-color: var(--air-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--air-accent) 15%, transparent); }
 .air-narrow-hint { display: none; }
+.air-sidebar-mode .air-head { height: 46px; flex-basis: 46px; padding: 0 10px; gap: 8px; }
+.air-sidebar-mode .air-brand-sub { display: none; }
+.air-sidebar-mode .air-brand-name { font-size: 13px; }
+.air-sidebar-mode .air-brand-mark { width: 24px; height: 24px; }
+.air-sidebar-mode .air-tools { gap: 5px; }
+.air-sidebar-mode .air-btn { height: 28px; padding: 0 8px; font-size: 11.5px; }
+.air-sidebar-mode .air-seg { padding: 2px; }
+.air-sidebar-mode .air-seg button { height: 22px; padding: 0 7px; font-size: 11px; }
+.air-sidebar-mode .air-field select { height: 27px; font-size: 11px; }
+.air-sidebar-mode .air-side { display: none; position: absolute; z-index: 30; top: 0; bottom: 0; left: 0; width: 250px; box-shadow: 18px 0 50px rgba(0,0,0,.2); }
+.air-sidebar-mode.show-side .air-side { display: flex; }
+.air-sidebar-mode .air-side-foot { display: none; }
+.air-sidebar-mode .air-page-grid { grid-template-columns: minmax(210px, 39%) minmax(0, 1fr); gap: 16px; }
+.air-sidebar-mode .air-visual-wrap { position: sticky; top: 8px; }
+.air-sidebar-mode .air-doc-head { padding: 18px 16px 2px; }
+.air-sidebar-mode .air-doc-title { font-size: 20px; }
+.air-sidebar-mode .air-page { padding: 14px 16px 32px; }
+.air-sidebar-mode .air-empty { padding: 18px; }
+.air-sidebar-mode .air-empty-icon { width: 56px; height: 56px; border-radius: 17px; }
+.air-sidebar-mode .air-empty h2 { font-size: 18px; }
+.air-sidebar-mode .air-empty p { font-size: 12px; }
+.air-sidebar-mode .air-empty-actions { gap: 6px; }
+.air-sidebar-mode .air-drop { margin-top: 16px; padding: 12px; }
+.air-sidebar-mode .air-block-zh { font-size: 14.5px; line-height: 1.75; }
+.air-sidebar-mode .air-block-orig { font-size: 12px; }
+.air-sidebar-mode .air-doc-sub { display: none; }
+.air-sidebar-mode .air-outline { max-height: 64px; overflow: auto; }
 .air-lightbox { position: fixed; inset: 0; z-index: 100; background: rgba(15, 14, 12, .82); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; backdrop-filter: blur(6px); }
 .air-lightbox img { max-width: 94vw; max-height: 88vh; object-fit: contain; background: #fff; box-shadow: 0 30px 90px rgba(0,0,0,.4); border-radius: 3px; }
 .air-lightbox-bar { position: absolute; top: 18px; left: 0; right: 0; display: flex; justify-content: center; color: #fff; font-size: 12px; gap: 14px; opacity: .85; }
@@ -256,6 +331,32 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
       return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
     }
 
+    function loadGlossary() {
+      try {
+        const value = JSON.parse(localStorage.getItem('dsh-ai-reader-glossary') || '[]')
+        return Array.isArray(value) ? value.filter((item) => item && item.src && item.dst) : []
+      } catch { return [] }
+    }
+    function saveGlossary(terms) {
+      try { localStorage.setItem('dsh-ai-reader-glossary', JSON.stringify(terms)) } catch { /* ignore */ }
+    }
+    function glossaryToText(terms) {
+      return (terms || []).map((item) => `${item.src}=${item.dst}`).join('\n')
+    }
+    function parseGlossaryText(text) {
+      const out = []
+      for (const raw of String(text || '').split(/\r?\n/)) {
+        const line = raw.trim()
+        if (!line || line.startsWith('#')) continue
+        const at = line.indexOf('=>') >= 0 ? line.indexOf('=>') : line.indexOf('=')
+        if (at <= 0) continue
+        const src = line.slice(0, at).trim()
+        const dst = line.slice(at + (line.slice(at, at + 2) === '=>' ? 2 : 1)).trim()
+        if (src && dst) out.push({ src, dst })
+      }
+      return out
+    }
+
     async function apiFetch(path, options) {
       const response = await fetch(API + path, options)
       let value = null
@@ -272,8 +373,12 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
     }
 
     class Reader {
-      constructor(root) {
+      constructor(root, options = {}) {
         this.root = root
+        this.opts = options
+        this.hostMode = options.host === 'sidebar' ? 'sidebar' : 'main'
+        this.initialDocId = options.docId || null
+        this.onQuote = typeof options.onQuote === 'function' ? options.onQuote : null
         this.doc = null
         this.config = null
         this.library = []
@@ -283,6 +388,9 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         this.mode = 'compare'
         this.target = 'zh'
         this.style = 'academic'
+        this.model = ''
+        this.zoom = 1
+        this.glossary = loadGlossary()
         this.auto = true
         this.txtOnly = false
         this.pageStatus = {}
@@ -293,10 +401,21 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         this.pageObjects = new Map()
         this.activePage = 1
         this.activeRaf = 0
+        this.searchTimer = 0
+        this.hit = null
         this.disposed = false
         this.toastTimer = null
         this.observer = null
         this.mount()
+        this.bootstrap()
+      }
+
+      async bootstrap() {
+        await this.loadConfig()
+        if (this.disposed) return
+        await this.loadLibrary()
+        if (this.disposed) return
+        if (this.initialDocId) await this.openDocId(this.initialDocId)
       }
 
       mount() {
@@ -304,7 +423,8 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         const style = document.createElement('style')
         style.textContent = CSS
         this.root.append(style)
-        this.shell = h('div', { class: 'air-root' })
+        this.shell = h('div', { class: `air-root air-host-${this.hostMode}` })
+        if (this.hostMode === 'sidebar') this.shell.classList.add('air-sidebar-mode')
         this.root.append(this.shell)
 
         const head = h('header', { class: 'air-head' },
@@ -337,7 +457,10 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         )
 
         const side = h('aside', { class: 'air-side' },
-          h('div', { class: 'air-side-head' }, h('div', { class: 'air-side-title' }, '文档')),
+          h('div', { class: 'air-side-head' },
+            h('div', { class: 'air-side-title' }, '文档'),
+            h('button', { class: 'air-btn ghost air-clear', 'data-act': 'clear-recent', title: '清空最近' }, '清空'),
+          ),
           h('div', { class: 'air-side-tabs' },
             h('button', { 'data-side-tab': 'recent', class: 'on' }, '最近'),
             h('button', { 'data-side-tab': 'workspace' }, '工作区'),
@@ -389,23 +512,27 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         this.shell.append(this.fileInput)
 
         this.bind()
-        this.loadConfig()
-        this.loadLibrary()
+        this.loading = null
       }
 
       bind() {
         this.shell.addEventListener('click', (event) => {
-          const target = event.target.closest('[data-act],[data-mode],[data-side-tab],[data-open-path],[data-open-id],[data-goto],[data-retranslate]')
+          const target = event.target.closest('[data-act],[data-mode],[data-side-tab],[data-open-path],[data-open-id],[data-goto],[data-retranslate],[data-zoom]')
           if (!target) return
           if (target.dataset.act === 'open') this.fileInput.click()
-          else if (target.dataset.act === 'sidebar') this.shell.classList.toggle('side-closed')
+          else if (target.dataset.act === 'sidebar') {
+            if (this.hostMode === 'sidebar') this.shell.classList.toggle('show-side')
+            else this.shell.classList.toggle('side-closed')
+          }
           else if (target.dataset.act === 'workspace') this.switchSideTab('workspace')
+          else if (target.dataset.act === 'clear-recent') this.clearRecent()
           else if (target.dataset.mode) this.setMode(target.dataset.mode)
           else if (target.dataset.sideTab) this.switchSideTab(target.dataset.sideTab)
           else if (target.dataset.openPath) this.openPath(target.dataset.openPath)
           else if (target.dataset.openId) this.openRecent(target.dataset.openId)
           else if (target.dataset.goto) this.scrollToPage(Number(target.dataset.goto))
           else if (target.dataset.retranslate) this.ensureTranslation(Number(target.dataset.retranslate), true)
+          else if (target.dataset.zoom) this.changeZoom(target.dataset.zoom === 'in' ? 0.25 : -0.25)
         })
         this.fileInput.addEventListener('change', () => {
           const file = this.fileInput.files?.[0]
@@ -446,11 +573,25 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         try {
           const config = await apiFetch('/config')
           this.config = config
-          const model = config.providers?.[0]?.models?.[0]?.id || ''
-          this.el.footModel.textContent = model ? `模型 ${model}` : ''
+          const options = this.modelOptions()
+          if (!this.model) this.model = config.defaults?.model || options[0]?.id || ''
+          this.el.footModel.textContent = this.model ? `模型 ${this.model}` : ''
         } catch (error) {
           this.toast(String(error.message || error), true)
         }
+      }
+
+      modelOptions() {
+        const seen = new Set()
+        const out = []
+        for (const provider of this.config?.providers || []) {
+          for (const model of provider.models || []) {
+            if (seen.has(model.id)) continue
+            seen.add(model.id)
+            out.push({ id: model.id, label: model.name || model.id })
+          }
+        }
+        return out
       }
 
       async loadLibrary() {
@@ -487,7 +628,13 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
             return
           }
           for (const row of rows) {
-            list.append(this.docRow(row.title || row.path, `${row.pageCount || '?'} 页 · ${fmtTime(row.openedAt)}`, () => this.openRecent(row.id), row.id === this.doc?.id, () => row.path))
+            const size = row.cacheBytes ? fmtSize(row.cacheBytes) : ''
+            const source = row.source === 'upload' ? '上传' : '工作区'
+            const missing = row.exists === false ? ' · 文件已丢失' : ''
+            const meta = `${row.pageCount || '?'} 页 · ${source}${size ? ` · ${size}` : ''}${missing}`
+            list.append(this.docRow(row.title || row.path, meta, () => this.openRecent(row.id), row.id === this.doc?.id, () => row.path, (event) => {
+              this.openRowMenu(row, event.currentTarget)
+            }))
           }
           return
         }
@@ -503,15 +650,169 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         }
       }
 
-      docRow(title, meta, onClick, active, titleAttr) {
+      docRow(title, meta, onClick, active, titleAttr, onMore) {
+        const more = onMore ? h('button', {
+          class: 'air-row-more', title: '更多操作', type: 'button', 'aria-label': '更多操作',
+          onclick: (event) => { event.stopPropagation(); onMore(event) },
+        }, '⋯') : null
         const row = h('div', { class: `air-doc-row${active ? ' on' : ''}`, onclick: onClick, title: titleAttr || title },
           icon('book', 16),
           h('div', { class: 'air-doc-main' },
             h('div', { class: 'air-doc-name' }, title),
             h('div', { class: 'air-doc-meta' }, meta),
           ),
+          more,
         )
         return row
+      }
+
+      openRowMenu(row, anchor) {
+        this.closeMenu()
+        const menu = h('div', { class: 'air-menu' },
+          h('button', { type: 'button', onclick: () => { this.closeMenu(); this.renameRecent(row) } }, '重命名'),
+          h('button', { type: 'button', onclick: () => { this.closeMenu(); this.deleteRecent(row, false) } }, '从最近移除'),
+          h('button', { class: 'danger', type: 'button', onclick: () => { this.closeMenu(); this.deleteRecent(row, true) } }, '删除本地缓存'),
+          h('div', { class: 'air-menu-note' }, row.source === 'upload' ? '删除缓存会同时删除上传的 PDF 副本。' : '工作区原 PDF 不会被删除。'),
+        )
+        const rect = anchor.getBoundingClientRect()
+        menu.style.left = `${Math.max(8, Math.min(window.innerWidth - 190, rect.right - 178))}px`
+        menu.style.top = `${Math.min(window.innerHeight - 160, rect.bottom + 4)}px`
+        this.shell.append(menu)
+        this.menuEl = menu
+        this.menuOff = (event) => {
+          if (!menu.contains(event.target)) this.closeMenu()
+        }
+        setTimeout(() => document.addEventListener('pointerdown', this.menuOff), 0)
+      }
+
+      closeMenu() {
+        if (this.menuEl) this.menuEl.remove()
+        this.menuEl = null
+        if (this.menuOff) document.removeEventListener('pointerdown', this.menuOff)
+        this.menuOff = null
+      }
+
+      dialog({ title, message, value, placeholder, confirmText = '确定', danger = false, input = false, textarea = false }) {
+        return new Promise((resolve) => {
+          const editable = input || textarea
+          const inputEl = textarea
+            ? h('textarea', { class: 'air-dialog-textarea', rows: 8, value: value || '', placeholder: placeholder || '' })
+            : input
+              ? h('input', { value: value || '', placeholder: placeholder || '' })
+              : null
+          const mask = h('div', { class: 'air-dialog-mask' })
+          const close = (result) => {
+            mask.remove()
+            document.removeEventListener('keydown', onKey)
+            resolve(result)
+          }
+          const box = h('div', { class: 'air-dialog' },
+            h('h3', {}, title),
+            message ? h('p', {}, message) : null,
+            inputEl,
+            h('div', { class: 'air-dialog-actions' },
+              h('button', { class: 'air-btn', type: 'button', onclick: () => close(null) }, '取消'),
+              h('button', { class: `air-btn primary${danger ? ' danger' : ''}`, type: 'button', onclick: () => close(editable ? inputEl.value.trim() : true) }, confirmText),
+            ),
+          )
+          mask.append(box)
+          mask.addEventListener('pointerdown', (event) => { if (event.target === mask) close(null) })
+          const onKey = (event) => {
+            if (event.key === 'Escape') close(null)
+            if (event.key === 'Enter' && input && !event.shiftKey) close(inputEl.value.trim())
+          }
+          document.addEventListener('keydown', onKey)
+          this.shell.append(mask)
+          setTimeout(() => {
+            inputEl?.focus()
+            if (inputEl && !textarea) inputEl.select()
+          }, 20)
+        })
+      }
+
+      async renameRecent(row) {
+        const title = await this.dialog({
+          title: '重命名', message: '只改阅读器里显示的名称，不会修改 PDF 文件。',
+          value: row.title, input: true, confirmText: '保存',
+        })
+        if (!title || title === row.title) return
+        try {
+          await apiFetch('/recent/rename', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: row.id, title }),
+          })
+          row.title = title
+          if (this.doc?.id === row.id) {
+            this.doc.title = title
+            const titleEl = this.shell.querySelector('.air-doc-title')
+            if (titleEl) titleEl.textContent = title
+          }
+          this.renderDocList()
+          this.toast('已重命名')
+        } catch (error) {
+          this.toast(String(error.message || error), true)
+        }
+      }
+
+      async deleteRecent(row, deleteCache) {
+        const ok = await this.dialog({
+          title: deleteCache ? '删除本地缓存？' : '从最近移除？',
+          message: deleteCache
+            ? (row.source === 'upload'
+              ? '会删除页面图、译文缓存和上传的 PDF 副本；不会影响其他文件。'
+              : '会删除页面图和译文缓存；工作区里的原 PDF 不会被删除。')
+            : '只会从「最近」列表移除，缓存仍保留在磁盘上。',
+          confirmText: deleteCache ? '删除' : '移除', danger: true,
+        })
+        if (!ok) return
+        try {
+          await apiFetch('/recent/delete', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: row.id, deleteCache }),
+          })
+          this.recent = this.recent.filter((item) => item.id !== row.id)
+          if (this.doc?.id === row.id) this.clearDoc()
+          this.renderDocList()
+          this.toast(deleteCache ? '已删除本地缓存' : '已从最近移除')
+        } catch (error) {
+          this.toast(String(error.message || error), true)
+        }
+      }
+
+      async clearRecent() {
+        if (this.recent.length === 0) return
+        const ok = await this.dialog({
+          title: '清空最近？',
+          message: '会清空「最近」列表，并删除这些文档的页面图和译文缓存；工作区原 PDF 不会被删除。',
+          confirmText: '清空并删除缓存', danger: true,
+        })
+        if (!ok) return
+        try {
+          await apiFetch('/recent/clear', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deleteCache: true }),
+          })
+          this.recent = []
+          this.clearDoc()
+          this.renderDocList()
+          this.toast('最近列表已清空')
+        } catch (error) {
+          this.toast(String(error.message || error), true)
+        }
+      }
+
+      clearDoc() {
+        this.doc = null
+        this.pageStatus = {}
+        this.translations = {}
+        this.hit = null
+        this.searchResultsEl = null
+        clearTimeout(this.searchTimer)
+        this.pendingTranslations.clear()
+        this.pageEls.clear()
+        for (const url of this.pageObjects.values()) URL.revokeObjectURL(url)
+        this.pageObjects.clear()
+        this.pageImages.clear()
+        this.shell.classList.remove('has-doc')
+        this.el.scroll.innerHTML = ''
+        this.el.footLeft.textContent = '就绪'
       }
 
       async openRecent(id) {
@@ -519,6 +820,23 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         if (!row) return
         if (this.doc?.id === id) return
         await this.openPath(row.path)
+      }
+
+      async openDocId(id) {
+        if (!id || this.disposed) return
+        try {
+          this.showLoading('正在打开阅读器…', '恢复文档与译文缓存')
+          const doc = await apiFetch(`/doc?id=${encodeURIComponent(id)}`)
+          this.setDoc(doc)
+        } catch (error) {
+          const row = this.recent.find((item) => item.id === id)
+          if (row?.path) {
+            await this.openPath(row.path)
+            return
+          }
+          this.toast(String(error.message || error), true)
+          this.hideLoading()
+        }
       }
 
       async openPath(path) {
@@ -556,6 +874,9 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         this.doc = doc
         this.pageStatus = {}
         this.translations = {}
+        this.hit = null
+        this.searchResultsEl = null
+        clearTimeout(this.searchTimer)
         this.pendingTranslations.clear()
         this.pageEls.clear()
         for (const url of this.pageObjects.values()) URL.revokeObjectURL(url)
@@ -575,18 +896,150 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
 
       renderDocHead() {
         const doc = this.doc
+        const models = this.modelOptions()
+        const modelSelect = models.length > 0 ? h('select', { class: 'air-doc-select', 'data-model-select': '' },
+          models.map((model) => h('option', { value: model.id }, model.label)),
+        ) : null
+        if (modelSelect) {
+          modelSelect.value = this.model || models[0].id
+          modelSelect.addEventListener('change', (event) => {
+            this.model = event.target.value
+            this.el.footModel.textContent = `模型 ${this.model}`
+            this.resetTranslations()
+            this.toast('已切换模型，正在按新模型重译')
+          })
+        }
+        const searchInput = h('input', {
+          class: 'air-doc-search', 'data-doc-search': '',
+          placeholder: '搜索原文 / 译文…', spellcheck: 'false',
+        })
+        const results = h('div', { class: 'air-search-results', 'data-search-results': '' })
+        searchInput.addEventListener('input', () => {
+          clearTimeout(this.searchTimer)
+          this.searchTimer = setTimeout(() => this.searchDocument(searchInput.value), 180)
+        })
+        searchInput.addEventListener('focus', () => {
+          if (searchInput.value.trim()) this.searchDocument(searchInput.value)
+        })
+        this.searchResultsEl = results
+        const glossaryButton = h('button', {
+          class: 'air-btn ghost air-doc-tool', type: 'button', title: '管理术语表', 'data-glossary': '',
+          onclick: () => this.openGlossary(),
+        }, `术语${this.glossary.length ? ` ${this.glossary.length}` : ''}`)
+        const exportButton = h('button', {
+          class: 'air-btn ghost air-doc-tool', type: 'button', title: '导出中英对照 Markdown',
+          onclick: () => this.exportMarkdown(),
+        }, '导出')
+        const tools = h('div', { class: 'air-doc-tools' },
+          modelSelect ? h('label', { class: 'air-doc-model' }, '模型', modelSelect) : null,
+          h('div', { class: 'air-doc-search-wrap' }, icon('search', 13), searchInput, results),
+          glossaryButton,
+          exportButton,
+        )
         const head = h('div', { class: 'air-doc-head' },
           h('h1', { class: 'air-doc-title' }, doc.title || '未命名论文'),
           h('div', { class: 'air-doc-sub' },
             h('span', {}, `${doc.pageCount} 页`),
             h('span', {}, doc.path || ''),
           ),
+          tools,
           doc.outline?.length ? h('div', { class: 'air-outline' },
             doc.outline.filter((item) => item.level <= 2).slice(0, 14).map((item) =>
               h('button', { 'data-goto': item.page, title: item.title }, item.title)),
           ) : null,
         )
         this.el.scroll.append(head)
+      }
+
+      searchDocument(query) {
+        if (!this.searchResultsEl) return
+        const q = String(query || '').trim().toLowerCase()
+        this.searchResultsEl.innerHTML = ''
+        if (!this.doc || !q) return
+        const hits = []
+        for (const page of this.doc.pages) {
+          for (const block of translatableBlocks(page)) {
+            const translated = this.translations[page.page]?.[block.id] || ''
+            const index = `${block.text}\n${translated}`.toLowerCase().indexOf(q)
+            if (index < 0) continue
+            hits.push({ page: page.page, id: block.id, text: block.text, translated })
+            if (hits.length >= 40) break
+          }
+          if (hits.length >= 40) break
+        }
+        if (hits.length === 0) {
+          this.searchResultsEl.append(h('div', { class: 'air-search-empty' }, '没有找到匹配段落'))
+          return
+        }
+        for (const hit of hits) {
+          const source = hit.text.toLowerCase().includes(q) ? hit.text : hit.translated
+          const at = Math.max(0, source.toLowerCase().indexOf(q) - 28)
+          const snippet = `${at > 0 ? '…' : ''}${source.slice(at, at + 90)}${source.length > at + 90 ? '…' : ''}`
+          this.searchResultsEl.append(h('button', {
+            class: 'air-search-hit', type: 'button',
+            onclick: () => { this.focusBlock(hit.page, hit.id); this.searchResultsEl.innerHTML = '' },
+          },
+            h('span', { class: 'air-search-page' }, `P${hit.page}`),
+            h('span', { class: 'air-search-snippet' }, snippet),
+          ))
+        }
+      }
+
+      focusBlock(pageNumber, blockId) {
+        this.scrollToPage(pageNumber)
+        setTimeout(() => {
+          const holder = this.pageEls.get(pageNumber)?.blocks
+          const row = holder?.querySelector(`[data-block="${blockId}"]`)
+          if (!row) return
+          this.shell.querySelectorAll('.air-block-hit').forEach((node) => node.classList.remove('air-block-hit'))
+          row.classList.add('air-block-hit')
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          setTimeout(() => row.classList.remove('air-block-hit'), 3200)
+        }, 280)
+      }
+
+      async openGlossary() {
+        const text = await this.dialog({
+          title: '术语表',
+          message: '每行一条，格式：原文=译文。保存后会按新术语重译当前可见页。\n例如：reward hacking=奖励黑客',
+          value: glossaryToText(this.glossary),
+          textarea: true,
+          confirmText: '保存并重译',
+        })
+        if (text === null) return
+        this.glossary = parseGlossaryText(text)
+        saveGlossary(this.glossary)
+        this.resetTranslations()
+        this.renderDocHeadGlossaryButton()
+        this.toast(`已保存 ${this.glossary.length} 条术语，正在重译`)
+      }
+
+      renderDocHeadGlossaryButton() {
+        const button = this.shell.querySelector('.air-doc-tool[title="管理术语表"]')
+        if (button) button.textContent = `术语${this.glossary.length ? ` ${this.glossary.length}` : ''}`
+      }
+
+      exportMarkdown() {
+        if (!this.doc) return
+        const lines = [`# ${this.doc.title || '未命名论文'}`, '', `> 来源：${this.doc.path || ''}`, '']
+        for (const page of this.doc.pages) {
+          const blocks = translatableBlocks(page)
+          if (blocks.length === 0) continue
+          lines.push(`## Page ${page.page}`, '')
+          for (const block of blocks) {
+            const translated = this.translations[page.page]?.[block.id]
+            lines.push(block.text, '')
+            if (translated) lines.push(`**译文**：${translated}`, '')
+          }
+        }
+        const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const anchor = h('a', { href: url, download: `${String(this.doc.title || 'paper').replace(/[\\/:*?"<>|]/g, '_')}.md` })
+        this.shell.append(anchor)
+        anchor.click()
+        anchor.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 2000)
+        this.toast('已导出 Markdown')
       }
 
       renderPages() {
@@ -612,28 +1065,31 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
             h('span', { class: 'air-page-no' }, `Page ${page.page}`),
             chip,
             h('span', { class: 'air-page-spacer' }),
+            h('button', { class: 'air-btn ghost air-zoom-btn', type: 'button', 'data-zoom': 'out', title: '缩小页面' }, '−'),
+            h('span', { class: 'air-zoom-label' }, `${Math.round(this.zoom * 100)}%`),
+            h('button', { class: 'air-btn ghost air-zoom-btn', type: 'button', 'data-zoom': 'in', title: '放大页面' }, '+'),
             h('button', { class: 'air-btn ghost', style: { height: '26px', padding: '0 8px', fontSize: '11px' }, 'data-retranslate': page.page, title: '重新翻译本页' }, icon('refresh', 13), '重译'),
             blockToggle,
           )
           const image = h('img', { alt: `第 ${page.page} 页` })
           const loading = h('div', { class: 'air-visual-loading' }, '加载页面…')
-          const visual = h('div', { class: 'air-visual', style: { aspectRatio: `${page.width} / ${page.height}` } }, image, loading)
+          const bbox = h('div', { class: 'air-bbox-highlight' })
+          const visual = h('div', { class: 'air-visual', style: { aspectRatio: `${page.width} / ${page.height}` } }, image, loading, bbox)
           const overlay = h('div', { class: 'air-overlay-layer' })
           visual.append(overlay)
           const blocks = h('div', { class: 'air-blocks' })
-          const grid = h('div', { class: 'air-page-grid' },
-            h('div', { class: 'air-visual-wrap' }, visual),
-            blocks,
-          )
+          const wrap = h('div', { class: 'air-visual-wrap' }, visual)
+          const grid = h('div', { class: 'air-page-grid' }, wrap, blocks)
           section.append(header, grid)
           this.el.scroll.append(section)
-          this.pageEls.set(page.page, { section, image, loading, overlay, blocks, chip })
+          this.pageEls.set(page.page, { section, image, loading, overlay, blocks, chip, visual, wrap, bbox })
           this.renderBlocks(page)
           this.observer.observe(section)
           image.addEventListener('load', () => { loading.style.display = 'none'; this.updateOverlay(page.page) })
           image.addEventListener('error', () => { loading.textContent = '页面加载失败' })
           image.addEventListener('click', () => this.openLightbox(page.page))
         }
+        this.applyZoom()
       }
 
       renderBlocks(page) {
@@ -648,9 +1104,15 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         for (const block of blocks) {
           const orig = h('div', { class: 'air-block-orig' }, block.text)
           const zh = h('div', { class: 'air-block-zh' }, h('span', { class: 'air-wait' }, '待翻译'))
-          const row = h('div', { class: `air-block ${block.role}` }, orig, zh)
+          const quote = h('button', {
+            class: 'air-quote', type: 'button', title: '引用到对话',
+            onclick: (event) => { event.stopPropagation(); this.quoteBlock(block, page.page) },
+          }, '引用')
+          const row = h('div', { class: `air-block ${block.role}` }, orig, zh, quote)
           row.dataset.block = block.id
           row.dataset.page = String(page.page)
+          row.addEventListener('mouseenter', () => this.showBbox(page.page, block))
+          row.addEventListener('mouseleave', () => this.hideBbox(page.page))
           holder.append(row)
         }
         this.updateBlockTranslations(page.page)
@@ -735,6 +1197,53 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         this.shell.append(box)
       }
 
+      changeZoom(delta) {
+        this.zoom = Math.min(2.5, Math.max(1, Math.round((this.zoom + delta) * 4) / 4))
+        this.applyZoom()
+      }
+
+      applyZoom() {
+        for (const entry of this.pageEls.values()) {
+          if (entry.visual) entry.visual.style.width = `${this.zoom * 100}%`
+          if (entry.wrap) entry.wrap.style.overflow = this.zoom > 1 ? 'auto' : ''
+        }
+        for (const label of this.shell.querySelectorAll('.air-zoom-label')) {
+          label.textContent = `${Math.round(this.zoom * 100)}%`
+        }
+      }
+
+      showBbox(pageNumber, block) {
+        const entry = this.pageEls.get(pageNumber)
+        const page = this.doc?.pages[pageNumber - 1]
+        if (!entry?.bbox || !page) return
+        const [x0, y0, x1, y1] = block.bbox
+        entry.bbox.style.left = `${(x0 / page.width) * 100}%`
+        entry.bbox.style.top = `${(y0 / page.height) * 100}%`
+        entry.bbox.style.width = `${((x1 - x0) / page.width) * 100}%`
+        entry.bbox.style.height = `${((y1 - y0) / page.height) * 100}%`
+        entry.bbox.style.display = 'block'
+      }
+
+      hideBbox(pageNumber) {
+        const entry = this.pageEls.get(pageNumber)
+        if (entry?.bbox) entry.bbox.style.display = 'none'
+      }
+
+      async quoteBlock(block, pageNumber) {
+        const translated = this.translations[pageNumber]?.[block.id]
+        const text = translated
+          ? `原文：${block.text}\n\n译文：${translated}`
+          : block.text
+        let result = 'copied'
+        if (this.onQuote) {
+          try { result = await this.onQuote(text) } catch { result = 'copied' }
+        }
+        if (result !== 'inserted') {
+          try { await navigator.clipboard.writeText(text) } catch { /* ignore */ }
+        }
+        this.toast(result === 'inserted' ? '已引用到输入框' : '已复制，可粘贴到对话')
+      }
+
       async loadPageImage(pageNumber) {
         if (this.pageObjects.has(pageNumber)) return
         const entry = this.pageEls.get(pageNumber)
@@ -810,6 +1319,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               id: this.doc.id, page: pageNumber, target: this.target, style: this.style, force,
+              model: this.model, glossary: this.glossary,
             }),
           })
           this.translations[pageNumber] = { ...(this.translations[pageNumber] || {}), ...(result.translations || {}) }
@@ -893,6 +1403,8 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
 
       dispose() {
         this.disposed = true
+        this.closeMenu()
+        clearTimeout(this.searchTimer)
         if (this.activeRaf) cancelAnimationFrame(this.activeRaf)
         this.pendingTranslations.clear()
         if (this.observer) this.observer.disconnect()
@@ -902,19 +1414,113 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
       }
     }
 
-    const inject = ['slots', 'locale', 'layout']
+    const inject = ['slots', 'locale', 'layout', 'sidebarRight', 'sidebarRightTabs', 'conversation']
+    const SIDEBAR_TAB_ID = 'dsh-ai-reader/sidebar'
+    const SIDEBAR_TAB_KIND = 'ai-reader'
+    let pluginCtx = null
 
     function AIReaderPanel() {
       const ref = React.useRef(null)
       React.useEffect(() => {
-        const reader = new Reader(ref.current)
+        const reader = new Reader(ref.current, { host: 'main' })
         if (typeof window !== 'undefined') window.__aiReader = reader
         return () => reader.dispose()
       }, [])
       return React.createElement('div', { ref, className: 'air-host' })
     }
 
+    function quoteToComposer(props, text) {
+      const actions = props?.inputActions
+      try {
+        const span = actions?.captureInsertion?.()
+        if (span && typeof actions?.insertText === 'function') {
+          const result = actions.insertText(`> ${text.replace(/\n/g, '\n> ')}\n\n`, span)
+          if (result !== false) return 'inserted'
+        }
+      } catch { /* fall through to clipboard */ }
+      return 'copied'
+    }
+
+    function SidebarReaderPanel(props) {
+      const useTabInfo = props?.useTabInfo
+      const info = typeof useTabInfo === 'function' ? useTabInfo() : null
+      const docId = info?.tab?.navigation?.params?.docId || ''
+      const ref = React.useRef(null)
+      React.useEffect(() => {
+        const reader = new Reader(ref.current, {
+          host: 'sidebar',
+          docId,
+          onQuote: (text) => quoteToComposer(props, text),
+        })
+        if (typeof window !== 'undefined') window.__aiReader = reader
+        return () => reader.dispose()
+      }, [docId])
+      return React.createElement('div', { ref, className: 'air-host' })
+    }
+
+    function ComposerReaderButton(props) {
+      const useInput = props?.useInput
+      const hasInput = typeof useInput === 'function'
+      const input = hasInput ? useInput((state) => state) : null
+      const ids = input?.attachmentIds || []
+      const [pdf, setPdf] = React.useState(null)
+      const [busy, setBusy] = React.useState(false)
+      const idsKey = ids.join('|')
+      React.useEffect(() => {
+        let terminated = false
+        let found = null
+        try {
+          const attachments = pluginCtx?.conversation?.resolveDraftAttachments?.(ids) || []
+          found = attachments.find((item) => item?.kind === 'file' && /\.pdf$/i.test(item.file?.name || '')) || null
+        } catch { found = null }
+        if (!terminated) setPdf(found)
+        return () => { terminated = true }
+      }, [idsKey])
+      if (!pdf && hasInput) return null
+      const open = async () => {
+        if (!pdf) {
+          try { pluginCtx.sidebarRight.openTab(SIDEBAR_TAB_KIND) } catch (error) { console.error('[ai-reader] open tab failed', error) }
+          return
+        }
+        setBusy(true)
+        try {
+          const file = pdf.file
+          const bytes = await file.arrayBuffer()
+          const response = await fetch(`${API}/upload?name=${encodeURIComponent(file.name)}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/pdf', 'x-filename': encodeURIComponent(file.name) },
+            body: bytes,
+          })
+          const value = await response.json().catch(() => null)
+          if (!response.ok) throw new Error(value?.error || `上传失败（${response.status}）`)
+          pluginCtx.sidebarRight.openTab(SIDEBAR_TAB_KIND, { params: { docId: value.id } })
+        } catch (error) {
+          // Keep the composer usable; a toast in the sidebar would be hidden until it opens.
+          console.error('[ai-reader] open attachment failed', error)
+          window.alert?.(String(error?.message || error))
+        } finally {
+          setBusy(false)
+        }
+      }
+      return React.createElement('button', {
+        type: 'button',
+        className: 'air-composer-btn',
+        title: '用 AI 阅读打开附件 PDF',
+        disabled: busy,
+        onClick: open,
+      },
+        React.createElement('span', {
+          style: { display: 'inline-flex', width: 14, height: 14 },
+          dangerouslySetInnerHTML: {
+            __html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 1 4 17.5z"/><path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H20"/></svg>',
+          },
+        }),
+        busy ? '解析中…' : 'AI 阅读',
+      )
+    }
+
     function apply(ctx) {
+      pluginCtx = ctx
       ctx.effect(() => ctx.locale.register('aiReader', {
         zh: { panel: 'AI 阅读' },
         en: { panel: 'AI Reader' },
@@ -936,6 +1542,22 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
       ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({
         name: 'main', key: 'ai-reader', locale: 'aiReader',
       }, AIReaderPanel)), 'dsh-ai-reader: main')
+
+      ctx.effect(() => ctx.sidebarRightTabs.register({
+        id: SIDEBAR_TAB_ID,
+        kind: SIDEBAR_TAB_KIND,
+        title: () => 'AI 阅读',
+        keepMounted: true,
+        guide: [{ id: 'reader', title: 'AI 阅读', description: '打开 PDF 做中英对照' }],
+      }), 'dsh-ai-reader: tab type')
+
+      ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
+        name: 'sidebar.right.pane.tab', key: SIDEBAR_TAB_ID, locale: 'aiReader',
+      }, SidebarReaderPanel)), 'dsh-ai-reader: sidebar body')
+
+      ctx.effect(() => ctx.slots.inject('conversation.input.right', () => ctx.slots.register({
+        name: 'conversation.input.right', id: 'ai-reader-open', order: 10, locale: 'aiReader',
+      }, ComposerReaderButton)), 'dsh-ai-reader: composer button')
     }
 
     exports.inject = inject

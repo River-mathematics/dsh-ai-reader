@@ -1,6 +1,6 @@
 {
   "name": "dsh-ai-reader",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI 阅读：在 DeepSeek Harness 中打开 PDF，按页翻译，支持中英对照与沉浸式译文覆盖。",
   "license": "MIT",
   "author": "River-mathematics",
@@ -54,7 +54,9 @@
       "immediately": true,
       "inject": [
         "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-sidebar"
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-conversation"
       ]
     }
   }

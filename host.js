@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import {
-  existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync, readdirSync,
+  existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync, readdirSync, rmSync,
 } from 'node:fs'
 import { dirname, join, extname, basename, relative, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
@@ -55,7 +55,90 @@ function remember(doc) {
     openedAt: Date.now(),
   }
   state.recent = [row, ...state.recent.filter((x) => x.path !== doc.path)].slice(0, 30)
+  persistRecent()
+}
+
+function persistRecent() {
   atomicWrite(RECENT_FILE, JSON.stringify(state.recent, null, 2))
+}
+
+function insidePath(child, parent) {
+  if (!child || !parent) return false
+  const c = resolve(child).toLowerCase()
+  const p = resolve(parent).toLowerCase()
+  return c === p || c.startsWith(p + sep)
+}
+
+function dirBytes(dir) {
+  if (!existsSync(dir)) return 0
+  let total = 0
+  const walk = (current) => {
+    let entries
+    try { entries = readdirSync(current, { withFileTypes: true }) } catch { return }
+    for (const entry of entries) {
+      const path = join(current, entry.name)
+      if (entry.isDirectory()) walk(path)
+      else {
+        try { total += statSync(path).size } catch { /* ignore */ }
+      }
+    }
+  }
+  walk(dir)
+  return total
+}
+
+function recentPublic() {
+  return state.recent.map((row) => ({
+    ...row,
+    cacheBytes: dirBytes(join(CACHE, row.id)),
+    source: insidePath(row.path, UPLOADS) ? 'upload' : 'workspace',
+    exists: existsSync(row.path),
+  }))
+}
+
+function removeRecent(id, deleteCache) {
+  const row = state.recent.find((item) => item.id === id)
+  state.recent = state.recent.filter((item) => item.id !== id)
+  persistRecent()
+  state.docs.delete(id)
+  if (deleteCache && /^[a-f0-9]{12,64}$/.test(String(id))) {
+    rmSync(join(CACHE, id), { recursive: true, force: true })
+    if (row?.path && insidePath(row.path, UPLOADS)) rmSync(row.path, { force: true })
+  }
+  return { removed: row !== undefined, id }
+}
+
+function renameRecent(id, title) {
+  const next = String(title || '').trim().slice(0, 200)
+  if (!next) throw new Error('标题不能为空')
+  const row = state.recent.find((item) => item.id === id)
+  if (!row) throw new Error('最近文档中没有这一项')
+  row.title = next
+  const cached = state.docs.get(id)
+  if (cached) cached.title = next
+  const metaFile = join(CACHE, id, 'doc.json')
+  if (existsSync(metaFile)) {
+    try {
+      const data = JSON.parse(readFileSync(metaFile, 'utf8'))
+      data.title = next
+      atomicWrite(metaFile, JSON.stringify(data))
+    } catch { /* keep recent title even if doc.json is unreadable */ }
+  }
+  persistRecent()
+  return { id, title: next }
+}
+
+function clearRecent(deleteCache) {
+  const ids = state.recent.map((row) => row.id)
+  const uploadPaths = state.recent.filter((row) => insidePath(row.path, UPLOADS)).map((row) => row.path)
+  state.recent = []
+  persistRecent()
+  for (const id of ids) {
+    state.docs.delete(id)
+    if (deleteCache && /^[a-f0-9]{12,64}$/.test(String(id))) rmSync(join(CACHE, id), { recursive: true, force: true })
+  }
+  if (deleteCache) for (const path of uploadPaths) rmSync(path, { force: true })
+  return { cleared: ids.length }
 }
 
 function runWorker(args, payload) {
@@ -132,15 +215,17 @@ async function openUpload(buffer, filename) {
   const file = join(UPLOADS, `${id}.pdf`)
   if (!existsSync(file)) writeFileSync(file, buffer)
   const doc = await openPath(file)
-  if (!doc.title || doc.title === basename(file)) {
-    const nice = String(filename || '').replace(/\.pdf$/i, '').trim()
-    if (nice) {
-      const internal = state.docs.get(doc.id)
-      internal.title = nice
-      doc.title = nice
-      atomicWrite(join(internal.dir, 'doc.json'), JSON.stringify({ title: internal.title, pageCount: internal.pageCount, pages: internal.pages, outline: internal.outline }))
-      remember(internal)
-    }
+  const nice = String(filename || '').replace(/\.pdf$/i, '').trim().slice(0, 200)
+  const generic = !doc.title
+    || /^[a-f0-9]{12,64}$/i.test(doc.title)
+    || /^(untitled|unknown|microsoft word|document\d*)$/i.test(doc.title)
+    || doc.title === basename(file)
+  if (nice && generic) {
+    const internal = state.docs.get(doc.id)
+    internal.title = nice
+    doc.title = nice
+    atomicWrite(join(internal.dir, 'doc.json'), JSON.stringify({ title: internal.title, pageCount: internal.pageCount, pages: internal.pages, outline: internal.outline }))
+    remember(internal)
   }
   return doc
 }
@@ -205,7 +290,7 @@ async function listModels(llm) {
   return value
 }
 
-async function pickModel(llm) {
+async function pickModel(llm, requestedModel) {
   const providers = await listModels(llm)
   if (providers.length === 0) throw new Error('没有可用的模型提供方')
   const preferredProvider = process.env.DSH_AI_READER_PROVIDER
@@ -213,7 +298,8 @@ async function pickModel(llm) {
     || providers.find((p) => p.id === 'deepseek-account')
     || providers.find((p) => p.models.length > 0)
     || providers[0]
-  const model = process.env.DSH_AI_READER_MODEL
+  const model = String(requestedModel || '').trim()
+    || process.env.DSH_AI_READER_MODEL
     || provider.models.find((m) => m.id === 'deepseek-flash')?.id
     || provider.models.find((m) => m.id.includes('flash'))?.id
     || provider.models[0]?.id
@@ -229,17 +315,21 @@ const SYSTEM_PROMPT = `你是一位严谨的学术论文翻译专家。你的任
 4. 不翻译段落前的编号或项目符号，只翻译正文。
 5. 严格按指定格式输出，不要添加任何前后说明。`
 
-function buildUserPrompt(items, target, style, docTitle, section) {
+function buildUserPrompt(items, target, style, docTitle, section, glossary = []) {
   const lang = target === 'en' ? 'English' : target === 'zh' ? '简体中文' : target
   const styleText = style === 'literal' ? '直译，尽量贴近原文语序，但必须通顺。'
     : style === 'plain' ? '通俗清楚，面向非本领域读者，术语第一次出现时加英文。'
       : '学术论文风格，准确、简洁、专业。'
+  const terms = glossary
+    .filter((item) => item && item.src && item.dst)
+    .map((item) => `- ${item.src} => ${item.dst}`)
+    .join('\n')
   const blocks = items.map((b) => `@@@${b.id}@@@\n${b.text}`).join('\n\n')
   return `把下面这篇论文的段落翻译成${lang}。
 文档标题：${docTitle || '（未命名）'}
 所在章节：${section || '（未知）'}
 风格：${styleText}
-
+${terms ? `术语表（必须遵守；locked 表示保留原文）：\n${terms}\n` : ''}
 输出格式：每个段落以 @@@段落ID@@@ 单独一行开头，紧接着是译文；不要输出原文，不要使用 Markdown 代码块。必须覆盖所有段落，顺序与输入一致。
 
 ${blocks}`
@@ -265,12 +355,12 @@ function parseTagged(text, ids) {
   return out
 }
 
-async function callModel(items, target, style, doc, page) {
+async function callModel(items, target, style, doc, page, requestedModel, glossary = []) {
   const llm = state.llm || (typeof globalThis.__DSH_AI_READER_CTX__?.get === 'function' ? globalThis.__DSH_AI_READER_CTX__.get('llm') : null)
   if (!llm) throw new Error('模型服务尚未就绪，请稍后重试')
-  const { provider, model } = await pickModel(llm)
+  const { provider, model } = await pickModel(llm, requestedModel)
   const section = (page.blocks || []).find((b) => b.role === 'heading')?.text || ''
-  const user = buildUserPrompt(items, target, style, doc.title, section)
+  const user = buildUserPrompt(items, target, style, doc.title, section, glossary)
   const messages = [
     { role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT }] },
     { role: 'user', content: [{ type: 'text', text: user }] },
@@ -320,9 +410,12 @@ function batchesFor(blocks, maxBlocks = 5, maxChars = 4200) {
   return out
 }
 
-async function translatePage(doc, pageNumber, target, style, force) {
+async function translatePage(doc, pageNumber, target, style, force, requestedModel, glossary = []) {
   const page = doc.pages[clamp(parseInt(pageNumber, 10), 1, doc.pageCount) - 1]
-  const key = `${doc.id}|${page.page}|${target}|${style}`
+  const modelName = String(requestedModel || '').trim()
+  const terms = Array.isArray(glossary) ? glossary.filter((item) => item && item.src && item.dst) : []
+  const glossaryHash = sha1(JSON.stringify(terms)).slice(0, 12)
+  const key = `${doc.id}|${page.page}|${target}|${style}|${modelName}|${glossaryHash}`
   if (state.translating.has(key)) return state.translating.get(key)
   const job = (async () => {
     const cache = loadTranslationCache(doc)
@@ -331,8 +424,9 @@ async function translatePage(doc, pageNumber, target, style, force) {
     const blocks = (page.blocks || []).filter((b) => b.text && b.text.trim().length > 1 && !['header', 'footer', 'figure', 'meta', 'label', 'formula', 'table'].includes(b.role))
     const translations = {}
     const pending = []
+    const cacheKey = (text) => `${TRANSLATION_VERSION}|${targetLang}|${styleName}|${modelName}|${glossaryHash}|${sha1(text)}`
     for (const b of blocks) {
-      const ck = `${TRANSLATION_VERSION}|${targetLang}|${styleName}|${sha1(b.text)}`
+      const ck = cacheKey(b.text)
       if (!force && cache[ck]) translations[b.id] = cache[ck]
       else pending.push(b)
     }
@@ -344,14 +438,13 @@ async function translatePage(doc, pageNumber, target, style, force) {
       const workers = Array.from({ length: Math.min(concurrency, batches.length) }, async () => {
         while (cursor < batches.length) {
           const batch = batches[cursor++]
-          const ids = new Set(batch.map((b) => b.id))
           try {
-            const parsed = await callModel(batch, targetLang, styleName, doc, page)
+            const parsed = await callModel(batch, targetLang, styleName, doc, page, modelName, terms)
             for (const b of batch) {
               const value = parsed[b.id]
               if (value) {
                 translations[b.id] = value
-                cache[`${TRANSLATION_VERSION}|${targetLang}|${styleName}|${sha1(b.text)}`] = value
+                cache[cacheKey(b.text)] = value
               } else {
                 failures.push({ id: b.id, error: 'missing in model output' })
               }
@@ -365,8 +458,8 @@ async function translatePage(doc, pageNumber, target, style, force) {
       await Promise.all(workers)
       saveTranslationCache(doc)
     }
-    let model = ''
-    try { model = (await pickModel(state.llm)).model } catch { /* ignore */ }
+    let model = modelName
+    try { model = (await pickModel(state.llm, modelName)).model } catch { /* ignore */ }
     return { translations, failures, model, page: page.page }
   })().finally(() => state.translating.delete(key))
   state.translating.set(key, job)
@@ -425,7 +518,7 @@ async function handleCore(route, { method, query, body, headers }) {
           workspace: WORKSPACE,
           python: PYTHON,
           providers,
-          defaults: { target: 'zh', style: 'academic', auto: true },
+          defaults: { target: 'zh', style: 'academic', auto: true, model: process.env.DSH_AI_READER_MODEL || 'deepseek-flash' },
           carrier: state.connection,
           version: '0.1.0',
         })
@@ -435,7 +528,21 @@ async function handleCore(route, { method, query, body, headers }) {
         return jsonResult(200, { root, files: scanPdfs(root) })
       }
       case '/api/ai-reader/recent': {
-        return jsonResult(200, { files: state.recent })
+        return jsonResult(200, { files: recentPublic() })
+      }
+      case '/api/ai-reader/recent/rename': {
+        const payload = safeJson(body.toString('utf8'), null)
+        if (!payload || typeof payload.id !== 'string') return errResult(400, '缺少 id')
+        return jsonResult(200, renameRecent(payload.id, payload.title))
+      }
+      case '/api/ai-reader/recent/delete': {
+        const payload = safeJson(body.toString('utf8'), null)
+        if (!payload || typeof payload.id !== 'string') return errResult(400, '缺少 id')
+        return jsonResult(200, removeRecent(payload.id, payload.deleteCache === true))
+      }
+      case '/api/ai-reader/recent/clear': {
+        const payload = safeJson(body.toString('utf8'), {}) || {}
+        return jsonResult(200, clearRecent(payload.deleteCache === true))
       }
       case '/api/ai-reader/open': {
         const payload = safeJson(body.toString('utf8'), null)
@@ -461,7 +568,7 @@ async function handleCore(route, { method, query, body, headers }) {
         const payload = safeJson(body.toString('utf8'), null)
         if (!payload || typeof payload.id !== 'string') return errResult(400, '缺少 id')
         const doc = getDoc(payload.id)
-        const result = await translatePage(doc, payload.page || 1, payload.target || 'zh', payload.style || 'academic', payload.force === true)
+        const result = await translatePage(doc, payload.page || 1, payload.target || 'zh', payload.style || 'academic', payload.force === true, payload.model, payload.glossary)
         return jsonResult(200, result)
       }
       default:
@@ -500,6 +607,9 @@ const ROUTES = [
   { path: '/api/ai-reader/config', methods: ['GET'] },
   { path: '/api/ai-reader/library', methods: ['GET'] },
   { path: '/api/ai-reader/recent', methods: ['GET'] },
+  { path: '/api/ai-reader/recent/rename', methods: ['POST'] },
+  { path: '/api/ai-reader/recent/delete', methods: ['POST'] },
+  { path: '/api/ai-reader/recent/clear', methods: ['POST'] },
   { path: '/api/ai-reader/open', methods: ['POST'] },
   { path: '/api/ai-reader/upload', methods: ['POST'] },
   { path: '/api/ai-reader/doc', methods: ['GET'] },
