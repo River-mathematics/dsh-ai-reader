@@ -165,6 +165,23 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
 .air-block.hide-orig .air-block-orig { display: none; }
 .air-block .air-skel { display: inline-block; height: 1em; border-radius: 4px; background: linear-gradient(90deg, var(--air-border) 20%, var(--air-panel-2) 45%, var(--air-border) 70%); background-size: 220% 100%; animation: airShimmer 1.5s linear infinite; width: 72%; }
 .air-block .air-wait { color: var(--air-faint); font-size: 12px; font-family: var(--air-sans); }
+.air-figure { margin: 16px 0; border: 1px solid var(--air-border); border-radius: 10px; background: var(--air-panel); overflow: hidden; }
+.air-figure-head { display: flex; align-items: center; gap: 8px; padding: 8px 11px; border-bottom: 1px solid var(--air-border); font-family: var(--air-sans); }
+.air-figure-label { color: var(--air-text); font-size: 11.5px; font-weight: 650; }
+.air-figure-kind { color: var(--air-faint); border: 1px solid var(--air-border); border-radius: 999px; padding: 1px 6px; font-size: 9.5px; }
+.air-figure-img { display: block; width: 100%; max-height: 420px; object-fit: contain; background: #fff; cursor: zoom-in; }
+.air-figure-caption { padding: 9px 11px 8px; font-family: var(--air-serif); color: var(--air-text); font-size: 13px; line-height: 1.65; }
+.air-figure-orig { margin-top: 5px; color: var(--air-faint); font-family: var(--air-sans); font-size: 10.5px; line-height: 1.55; }
+.air-figure-ocr { border-top: 1px dashed color-mix(in srgb, var(--air-border) 80%, transparent); padding: 0 11px 10px; font-family: var(--air-sans); }
+.air-figure-ocr summary { cursor: pointer; padding: 8px 0 4px; color: var(--air-muted); font-size: 11px; user-select: none; }
+.air-figure-ocr-list { list-style: none; margin: 0; padding: 0; max-height: 230px; overflow: auto; }
+.air-figure-ocr-line { padding: 5px 0; border-top: 1px solid color-mix(in srgb, var(--air-border) 65%, transparent); }
+.air-figure-ocr-line:first-child { border-top: 0; }
+.air-ocr-orig { color: var(--air-faint); font-size: 10.5px; line-height: 1.45; }
+.air-ocr-zh { color: var(--air-text); font-size: 12px; line-height: 1.55; margin-top: 2px; white-space: pre-wrap; }
+.air-figure-ocr-empty { padding: 0 11px 10px; color: var(--air-faint); font-family: var(--air-sans); font-size: 10.5px; }
+.hide-figures .air-figure { display: none; }
+.air-doc-tool.on { color: var(--air-accent); border-color: color-mix(in srgb, var(--air-accent) 45%, var(--air-border)); }
 @keyframes airShimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
 .air-toast { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%) translateY(10px); background: #1f1d1a; color: #fff; font-size: 12px; padding: 9px 14px; border-radius: 9px; opacity: 0; pointer-events: none; transition: .2s; z-index: 60; max-width: 80%; text-align: center; }
 .air-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -367,8 +384,20 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
 
     const TRANSLATABLE = new Set(['body', 'heading', 'caption'])
     function translatableBlocks(page) {
+      const figures = page?.figures || []
+      const figureCaptions = new Set(figures.map((figure) => figure.captionBlockId).filter(Boolean))
+      const insideFigure = (block) => {
+        const x = (block.bbox[0] + block.bbox[2]) / 2
+        const y = (block.bbox[1] + block.bbox[3]) / 2
+        return figures.some((figure) => {
+          const box = figure.bbox || []
+          return x >= box[0] && x <= box[2] && y >= box[1] && y <= box[3]
+        })
+      }
       return (page?.blocks || []).filter((b) =>
         b && TRANSLATABLE.has(b.role) && typeof b.text === 'string' && b.text.trim().length > 1
+        && !figureCaptions.has(b.id)
+        && !insideFigure(b)
         && !(b.role === 'body' && b.text.trim().length < 12))
     }
 
@@ -393,6 +422,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         this.glossary = loadGlossary()
         this.auto = true
         this.txtOnly = false
+        this.showFigures = true
         this.pageStatus = {}
         this.translations = {}
         this.pendingTranslations = new Set()
@@ -934,9 +964,19 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
           class: 'air-btn ghost air-doc-tool', type: 'button', title: '导出中英对照 Markdown',
           onclick: () => this.exportMarkdown(),
         }, '导出')
+        const figureButton = h('button', {
+          class: 'air-btn ghost air-doc-tool', type: 'button', title: '显示/隐藏译文栏中的图表卡片',
+          onclick: () => {
+            this.showFigures = !this.showFigures
+            this.shell.classList.toggle('hide-figures', !this.showFigures)
+            figureButton.classList.toggle('on', this.showFigures)
+          },
+        }, '图表')
+        figureButton.classList.toggle('on', this.showFigures)
         const tools = h('div', { class: 'air-doc-tools' },
           modelSelect ? h('label', { class: 'air-doc-model' }, '模型', modelSelect) : null,
           h('div', { class: 'air-doc-search-wrap' }, icon('search', 13), searchInput, results),
+          figureButton,
           glossaryButton,
           exportButton,
         )
@@ -1028,12 +1068,26 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         const lines = [`# ${this.doc.title || '未命名论文'}`, '', `> 来源：${this.doc.path || ''}`, '']
         for (const page of this.doc.pages) {
           const blocks = translatableBlocks(page)
-          if (blocks.length === 0) continue
+          const figures = page.figures || []
+          if (blocks.length === 0 && figures.length === 0) continue
           lines.push(`## Page ${page.page}`, '')
           for (const block of blocks) {
             const translated = this.translations[page.page]?.[block.id]
             lines.push(block.text, '')
             if (translated) lines.push(`**译文**：${translated}`, '')
+          }
+          for (const figure of figures) {
+            const caption = this.translations[page.page]?.[figure.captionBlockId]
+            if (caption || figure.caption) lines.push(`**${figure.label || '图表'}**：${caption || figure.caption}`, '')
+            const ocr = Array.isArray(figure.ocr) ? figure.ocr : []
+            if (ocr.length > 0) {
+              lines.push('图中文字：')
+              ocr.forEach((line, index) => {
+                const translated = this.translations[page.page]?.[`${figure.id}-o${index + 1}`]
+                lines.push(`- ${line.text}${translated ? ` → ${translated}` : ''}`)
+              })
+              lines.push('')
+            }
           }
         }
         const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
@@ -1101,11 +1155,27 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         if (!holder) return
         holder.innerHTML = ''
         const blocks = translatableBlocks(page)
-        if (blocks.length === 0) {
+        const figures = page.figures || []
+        if (blocks.length === 0 && figures.length === 0) {
           holder.append(h('div', { class: 'air-side-empty' }, '这一页主要是图表或公式，没有可翻译的正文段落。'))
           return
         }
-        for (const block of blocks) {
+        const entries = blocks.map((block) => ({ kind: 'block', block }))
+        for (const figure of figures) {
+          const item = { kind: 'figure', figure }
+          let index = -1
+          if (figure.afterBlockId) {
+            index = entries.findIndex((entry) => entry.kind === 'block' && entry.block.id === figure.afterBlockId)
+          }
+          if (index >= 0) entries.splice(index + 1, 0, item)
+          else entries.unshift(item)
+        }
+        for (const entry of entries) {
+          if (entry.kind === 'figure') {
+            holder.append(this.figureCard(page, entry.figure))
+            continue
+          }
+          const block = entry.block
           const orig = h('div', { class: 'air-block-orig' }, block.text)
           const zh = h('div', { class: 'air-block-zh' }, h('span', { class: 'air-wait' }, '待翻译'))
           const quote = h('button', {
@@ -1120,6 +1190,79 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
           holder.append(row)
         }
         this.updateBlockTranslations(page.page)
+      }
+
+      figureCard(page, figure) {
+        const url = `${API}/figure?id=${encodeURIComponent(this.doc.id)}&file=${encodeURIComponent(figure.file)}`
+        const image = h('img', {
+          class: 'air-figure-img', src: url, alt: figure.label || '图表', loading: 'lazy',
+        })
+        image.addEventListener('click', () => this.openImageLightbox(url, `${figure.label || '图表'} · Page ${page.page}`))
+        const caption = figure.caption || ''
+        const translatedCaption = this.translations[page.page]?.[figure.captionBlockId] || ''
+        const captionNode = h('div', {
+          class: 'air-figure-caption-zh', 'data-figure-caption': figure.id,
+        }, translatedCaption || caption || '（无图注）')
+        const captionBlock = h('figcaption', { class: 'air-figure-caption' },
+          captionNode,
+          translatedCaption && caption ? h('div', { class: 'air-figure-orig' }, caption) : null,
+        )
+        let ocrBlock = null
+        const lines = Array.isArray(figure.ocr) ? figure.ocr : []
+        if (lines.length > 0) {
+          const list = h('ul', { class: 'air-figure-ocr-list' })
+          lines.forEach((line, index) => {
+            const id = `${figure.id}-o${index + 1}`
+            const translated = this.translations[page.page]?.[id] || ''
+            list.append(h('li', { class: 'air-figure-ocr-line' },
+              h('div', { class: 'air-ocr-orig' }, line.text),
+              h('div', { class: 'air-ocr-zh', 'data-ocr-zh': id }, translated || '待翻译'),
+            ))
+          })
+          ocrBlock = h('details', { class: 'air-figure-ocr' },
+            h('summary', {}, `图中文字 · ${lines.length} 条`),
+            list,
+          )
+        } else {
+          ocrBlock = h('div', { class: 'air-figure-ocr-empty' },
+            figure.ocrError || '未识别到图中文字')
+        }
+        const card = h('figure', { class: 'air-figure', 'data-figure': figure.id },
+          h('div', { class: 'air-figure-head' },
+            h('span', { class: 'air-figure-label' }, figure.label || '图表'),
+            h('span', { class: 'air-figure-kind' }, figure.kind === 'table' ? '表格' : '图表'),
+          ),
+          image,
+          captionBlock,
+          ocrBlock,
+        )
+        return card
+      }
+
+      updateFigureTranslations(pageNumber) {
+        const page = this.doc?.pages[pageNumber - 1]
+        const holder = this.pageEls.get(pageNumber)?.blocks
+        if (!page || !holder) return
+        const map = this.translations[pageNumber] || {}
+        const status = this.pageStatus[pageNumber] || 'idle'
+        for (const figure of page.figures || []) {
+          const caption = holder.querySelector(`[data-figure-caption="${figure.id}"]`)
+          if (caption) {
+            const translated = map[figure.captionBlockId]
+            if (translated) caption.textContent = translated
+            else if (figure.caption) caption.textContent = figure.caption
+          }
+          const lines = Array.isArray(figure.ocr) ? figure.ocr : []
+          lines.forEach((line, index) => {
+            const node = holder.querySelector(`[data-ocr-zh="${figure.id}-o${index + 1}"]`)
+            if (!node) return
+            const translated = map[`${figure.id}-o${index + 1}`]
+            if (translated) node.textContent = translated
+            else if (status === 'loading') node.textContent = '翻译中…'
+            else if (status === 'error') node.textContent = '翻译失败'
+            else node.textContent = '待翻译'
+          })
+        }
       }
 
       updateBlockTranslations(pageNumber) {
@@ -1147,6 +1290,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
           }
         }
         this.updateOverlay(pageNumber)
+        this.updateFigureTranslations(pageNumber)
       }
 
       updateOverlay(pageNumber) {
@@ -1190,10 +1334,14 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
       openLightbox(pageNumber) {
         const url = this.pageObjects.get(pageNumber)
         if (!url) return
+        this.openImageLightbox(url, `${this.doc?.title || ''} · 第 ${pageNumber} 页`)
+      }
+
+      openImageLightbox(url, label) {
         const box = h('div', { class: 'air-lightbox' },
-          h('div', { class: 'air-lightbox-bar' }, `${this.doc?.title || ''} · 第 ${pageNumber} 页`),
+          h('div', { class: 'air-lightbox-bar' }, label || ''),
           h('button', { class: 'air-lightbox-close', title: '关闭', onclick: () => box.remove() }, icon('close', 17)),
-          h('img', { src: url, alt: `第 ${pageNumber} 页` }),
+          h('img', { src: url, alt: label || '图表' }),
         )
         box.addEventListener('click', (event) => { if (event.target === box) box.remove() })
         const onKey = (event) => { if (event.key === 'Escape') { box.remove(); window.removeEventListener('keydown', onKey) } }

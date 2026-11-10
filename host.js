@@ -16,7 +16,7 @@ const DEFAULT_WORKSPACE = join(homedir(), 'Documents', 'deepseek-harness', 'defa
 const WORKSPACE = process.env.DSH_AI_READER_WORKSPACE || (existsSync(DEFAULT_WORKSPACE) ? DEFAULT_WORKSPACE : process.cwd())
 const PYTHON = process.env.DSH_AI_READER_PYTHON || 'python'
 const EXTRACT_VERSION = 2
-const TRANSLATION_VERSION = 2
+const TRANSLATION_VERSION = 3
 
 const state = {
   docs: new Map(),
@@ -116,7 +116,7 @@ function renameRecent(id, title) {
   row.title = next
   const cached = state.docs.get(id)
   if (cached) cached.title = next
-  const metaFile = join(CACHE, id, 'doc.json')
+  const metaFile = join(CACHE, id, 'doc-v3.json')
   if (existsSync(metaFile)) {
     try {
       const data = JSON.parse(readFileSync(metaFile, 'utf8'))
@@ -195,7 +195,7 @@ async function openPath(path) {
   const dir = join(CACHE, id)
   ensureDir(dir)
   let data
-  const metaFile = join(dir, 'doc.json')
+  const metaFile = join(dir, 'doc-v3.json')
   if (existsSync(metaFile)) {
     data = JSON.parse(readFileSync(metaFile, 'utf8'))
   } else {
@@ -224,7 +224,7 @@ async function openUpload(buffer, filename) {
     const internal = state.docs.get(doc.id)
     internal.title = nice
     doc.title = nice
-    atomicWrite(join(internal.dir, 'doc.json'), JSON.stringify({ title: internal.title, pageCount: internal.pageCount, pages: internal.pages, outline: internal.outline }))
+    atomicWrite(join(internal.dir, 'doc-v3.json'), JSON.stringify({ title: internal.title, pageCount: internal.pageCount, pages: internal.pages, outline: internal.outline }))
     remember(internal)
   }
   return doc
@@ -240,6 +240,7 @@ function publicDoc(doc) {
     pages: doc.pages.map((p) => ({
       page: p.page, width: p.width, height: p.height,
       blocks: p.blocks,
+      figures: p.figures || [],
     })),
   }
 }
@@ -421,18 +422,34 @@ async function translatePage(doc, pageNumber, target, style, force, requestedMod
     const cache = loadTranslationCache(doc)
     const targetLang = target || 'zh'
     const styleName = style || 'academic'
-    const blocks = (page.blocks || []).filter((b) => b.text && b.text.trim().length > 1 && !['header', 'footer', 'figure', 'meta', 'label', 'formula', 'table'].includes(b.role))
+    const figureBoxes = (page.figures || []).map((figure) => figure.bbox || []).filter((box) => box.length === 4)
+    const insideFigure = (block) => {
+      const x = (block.bbox[0] + block.bbox[2]) / 2
+      const y = (block.bbox[1] + block.bbox[3]) / 2
+      return figureBoxes.some((box) => x >= box[0] && x <= box[2] && y >= box[1] && y <= box[3])
+    }
+    const blocks = (page.blocks || []).filter((b) => b.text && b.text.trim().length > 1 && !['header', 'footer', 'figure', 'meta', 'label', 'formula', 'table'].includes(b.role)
+      && !(b.role !== 'caption' && insideFigure(b)))
+    const ocrItems = []
+    for (const figure of page.figures || []) {
+      const lines = Array.isArray(figure.ocr) ? figure.ocr : []
+      lines.forEach((line, index) => {
+        const text = String(line?.text || '').trim()
+        if (text.length > 1) ocrItems.push({ id: `${figure.id}-o${index + 1}`, text })
+      })
+    }
+    const items = [...blocks, ...ocrItems]
     const translations = {}
     const pending = []
     const cacheKey = (text) => `${TRANSLATION_VERSION}|${targetLang}|${styleName}|${modelName}|${glossaryHash}|${sha1(text)}`
-    for (const b of blocks) {
+    for (const b of items) {
       const ck = cacheKey(b.text)
       if (!force && cache[ck]) translations[b.id] = cache[ck]
       else pending.push(b)
     }
     const failures = []
     if (pending.length > 0) {
-      const batches = batchesFor(pending)
+      const batches = batchesFor(pending, 8, 5000)
       const concurrency = 3
       let cursor = 0
       const workers = Array.from({ length: Math.min(concurrency, batches.length) }, async () => {
@@ -520,7 +537,7 @@ async function handleCore(route, { method, query, body, headers }) {
           providers,
           defaults: { target: 'zh', style: 'academic', auto: true, model: process.env.DSH_AI_READER_MODEL || 'deepseek-flash' },
           carrier: state.connection,
-          version: '0.2.1',
+          version: '0.3.0',
         })
       }
       case '/api/ai-reader/library': {
@@ -563,6 +580,15 @@ async function handleCore(route, { method, query, body, headers }) {
         const doc = getDoc(query.get('id') || '')
         const png = await renderPage(doc, query.get('page') || '1', query.get('zoom') || '2')
         return { status: 200, headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' }, body: png }
+      }
+      case '/api/ai-reader/figure': {
+        const doc = getDoc(query.get('id') || '')
+        const file = String(query.get('file') || '')
+        const abs = resolve(doc.dir, file)
+        if (!file || !insidePath(abs, join(doc.dir, 'figures')) || !existsSync(abs)) {
+          return errResult(404, 'figure not found')
+        }
+        return { status: 200, headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' }, body: readFileSync(abs) }
       }
       case '/api/ai-reader/translate': {
         const payload = safeJson(body.toString('utf8'), null)
@@ -614,6 +640,7 @@ const ROUTES = [
   { path: '/api/ai-reader/upload', methods: ['POST'] },
   { path: '/api/ai-reader/doc', methods: ['GET'] },
   { path: '/api/ai-reader/page', methods: ['GET'] },
+  { path: '/api/ai-reader/figure', methods: ['GET'] },
   { path: '/api/ai-reader/translate', methods: ['POST'] },
 ]
 

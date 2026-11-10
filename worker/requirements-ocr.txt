@@ -1,0 +1,3 @@
+# Optional OCR support for figure cards. Without this, figure images and
+# captions still work; the "图中文字" list is simply unavailable.
+rapidocr_onnxruntime>=1.2,<2

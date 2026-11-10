@@ -2,9 +2,19 @@
 
 > 在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里边聊边读论文：打开 PDF，按页翻译，左侧保留原始版面，右侧逐段中英对照；也可以把译文直接覆盖在原文位置上。
 
-**版本 0.2.1** · DSH 0.2.x · MIT
+**版本 0.3.0** · DSH 0.2.x · MIT
 
 ![AI Reader 演示](docs/demo.gif)
+
+## 0.3 更新：图表回到译文栏，图中文字可查
+
+- **图表卡片**：右侧译文栏按阅读顺序插入图/表卡片，不再只剩文字；图注跟着翻译。
+- **图中文字**：对图表截图做 OCR，生成可折叠的「图中文字」双语列表；不覆盖、不改写原图。
+- **点击放大**：图表卡片可点击放大，看坐标轴、图例和细节。
+- **可关闭**：工具栏「图表」按钮可以隐藏/显示所有图表卡片，避免对照模式太拥挤。
+- **可选 OCR**：没有安装 OCR 依赖时，图表和图注仍然显示，只是「图中文字」列表提示安装。
+
+![图表卡片和图中文字](docs/preview-figures.png)
 
 ## 0.2 更新：从“翻译 PDF”到“边聊边读”
 
@@ -68,12 +78,34 @@
 | 模型 | `deepseek-flash` / `deepseek-v4-pro` 切换，缓存按模型隔离 |
 | 术语表 | 每行 `原文=译文`，保存后按术语重译，缓存按术语表哈希隔离 |
 | 文内搜索 | 搜索原文/译文，跳转到对应段落 |
+| 图表 | 按阅读顺序在译文栏插入图/表卡片，图注翻译 |
+| 图中文字 | OCR 后提供双语列表；纯数字刻度会跳过 |
 | 缩放 | 100%–250%，查看公式和表格细节 |
-| 导出 | 当前文档已翻译内容导出为 Markdown |
+| 导出 | 当前文档已翻译内容和图中文字导出为 Markdown |
 
 | 文内搜索 | 术语表 |
 |---|---|
 | ![文内搜索](docs/preview-search.png) | ![术语表](docs/preview-glossary.png) |
+
+### 图表和图中文字
+
+阅读器会从每一页提取：
+
+- PyMuPDF 识别到的位图区域；
+- `find_tables()` 识别到的表格区域；
+- 有 `Figure N` / `Table N` 图注的矢量图区域（用图注附近的图形聚类补齐）。
+
+这些区域被裁剪成 PNG，按 bbox 的阅读顺序插到译文段落之间。图注继续走原来的翻译管线；图表内部的文字用 RapidOCR 识别，去掉纯数字刻度后，作为可折叠的「图中文字」列表展示，并逐条翻译。
+
+> OCR 是**可选的**：
+>
+> ```bash
+> python -m pip install -r worker/requirements-ocr.txt
+> ```
+>
+> 不安装时，图表和图注仍然工作；「图中文字」会提示缺少 OCR 引擎。设置环境变量 `DSH_AI_READER_OCR=0` 可以完全关闭 OCR。
+>
+> 这是“看图 + 查图中文字”，不是把原图重绘成中文图；复杂公式、密集坐标轴和低分辨率截图仍可能有 OCR 错误。
 
 ### 沉浸翻译
 
@@ -90,6 +122,7 @@
 | DSH Desktop | 0.2.x（在 0.2.1-rc.5 上测试） |
 | Python | 3.10+，`python` 需要在 PATH 中 |
 | PyMuPDF | 1.24–1.x（在 1.28.2 上测试） |
+| RapidOCR（可选） | 1.2.x，用于「图中文字」OCR |
 
 不需要 Node.js 构建：仓库里的 `client.js` 是可直接加载的客户端 bundle。
 
@@ -106,6 +139,12 @@ cd dsh-ai-reader
 
 ```bash
 python -m pip install -r worker/requirements.txt
+```
+
+要启用「图中文字」OCR，再安装可选依赖：
+
+```bash
+python -m pip install -r worker/requirements-ocr.txt
 ```
 
 ### 3. 安装到 DSH profile
@@ -171,14 +210,15 @@ client.js（DSH Web GUI）
   └─ /api/ai-reader/*（浏览器 webServer + 桌面 shell fetch route）
         │
         ├─ host.js：打开/上传/最近管理/页面图/翻译
-        │    ├─ worker/main.py（PyMuPDF）：段落提取 + 页面 PNG
+        │    ├─ worker/main.py（PyMuPDF）：段落 / 图表提取 + 页面 PNG + OCR
         │    └─ ctx.llm.stream()：调用 DSH 当前账号可用的模型
         │
-        └─ ~/.dsh/cache/ai-reader/：文档、页面图、翻译缓存
+        └─ ~/.dsh/cache/ai-reader/：文档、页面图、图表裁剪、翻译缓存
 ```
 
 - 段落按 PyMuPDF 的 block/column 信息提取，过滤页眉页脚、图表标签和公式碎片。
-- 翻译按批（≤5 段/批）并发请求，返回后按 block id 合并；缓存键包含模型和术语表哈希。
+- 图表区域另外保存为 `figures/pNNNN-fN.png`；OCR 文本按行保存，纯数字刻度跳过。
+- 翻译按批（≤8 段/批）并发请求，返回后按 block id 合并；缓存键包含模型和术语表哈希。
 - 页面图由 PyMuPDF 按 2x 渲染，滚动到附近才加载。
 - 右侧栏 tab 使用 DSH 原生 `keepMounted`，切换 tab 时保留文档和译文状态。
 - 没有新增 agent：翻译和聊天都走当前 DSH 会话的模型服务。
@@ -191,6 +231,7 @@ host.js                 HTTP 路由与翻译编排
 client.js               DSH 客户端插件 bundle
 worker/main.py          PyMuPDF 提取/渲染 worker
 worker/requirements.txt Python 依赖
+worker/requirements-ocr.txt 可选 OCR 依赖
 cordis.patch.yml        DSH bundle patch
 docs/                   README 截图
 ```
@@ -204,16 +245,18 @@ docs/                   README 截图
 
 ## 已知限制
 
-- **仅文本型 PDF**：扫描版没有文本层，暂不支持 OCR。
+- **仅文本型 PDF**：扫描版没有文本层，暂不支持整页 OCR；图表 OCR 只针对已检测到的图表区域。
 - **公式**：复杂公式可能被拆成多个文本块；这些块会跳过翻译，但原文仍显示在页面图上。
-- **表格**：当前以页面图为准，不逐单元格翻译。
-- **延迟**：首次打开一页通常需要几秒（取决于模型）；命中缓存后很快。
+- **表格**：以表格截图 + 图注为准，不逐单元格重排；OCR 列表也不保留表格行列结构。
+- **图中文字 OCR**：best-effort；纯数字刻度会被跳过，斜体、公式、密集坐标轴和低分辨率截图可能识别错误。
+- **图表检测**：PDF 里的图形没有统一语义，极少数纯矢量图或跨栏组合图可能漏检或合并过大。
+- **延迟**：首次打开一页通常需要几秒（取决于模型）；OCR 会额外增加首次提取时间，命中缓存后很快。
 - **翻译质量**：取决于 DSH 当前账号可用的模型；可以在阅读器里切换 `deepseek-flash` / `deepseek-v4-pro`。
 - **右侧栏是 Session 级的**：切换对话 Session 时阅读器 tab 不会跟随；打开同一 Session 会保留。需要跨 Session 时可使用左侧栏的全屏阅读。
-- **导出范围**：Markdown 导出包含当前文档所有已翻译段落；未翻译段落只保留原文。暂不支持导出 PDF。
+- **导出范围**：Markdown 导出包含当前文档所有已翻译段落、图注和 OCR 文本；未翻译段落只保留原文。暂不支持导出 PDF 或把图片嵌入 Markdown。
 - **引用到对话**：插入当前输入框光标位置；如果编辑器不可写，会退化为复制到剪贴板。
 
-> PyMuPDF 由用户通过 `worker/requirements.txt` 单独安装，遵循其 AGPL / 商业许可；本仓库不打包 PyMuPDF。
+> PyMuPDF 由用户通过 `worker/requirements.txt` 单独安装，遵循其 AGPL / 商业许可；RapidOCR 通过 `worker/requirements-ocr.txt` 可选安装。本仓库不打包这两个依赖。
 
 ## 开发
 
@@ -230,6 +273,14 @@ python -m py_compile worker/main.py
 客户端是手写的 CJS 风格 bundle，外层包装为 `window.__ModuleLoader__.load(...)`；修改 `client.js` 后刷新 DSH 页面即可加载新 bundle。宿主侧 `index.js` 通过带时间戳的动态 import 加载 `host.js`，便于在开发时通过插件重载更新路由。
 
 ## 更新日志
+
+### 0.3.0
+
+- 新增图表/表格卡片：位图、表格和带图注的矢量图按阅读顺序插入译文栏。
+- 新增图注翻译和「图中文字」OCR 双语列表，纯数字刻度自动跳过。
+- 新增「图表」显示/隐藏开关、图表点击放大、OCR 可选依赖。
+- 翻译时跳过图表区域内的重复文本块，避免右侧出现两遍标签。
+- Markdown 导出包含图注和 OCR 文本。
 
 ### 0.2.1
 
@@ -255,8 +306,11 @@ python -m py_compile worker/main.py
 - [x] 术语表 / 锁定译名（基础版）。
 - [x] 模型选择器（`deepseek-flash` / `deepseek-v4-pro`）。
 - [x] 文内搜索、页面缩放、段落高亮、Markdown 导出。
+- [x] 图表卡片、图注翻译、图中文字 OCR 列表。
 - [ ] 术语表 `locked` 语法与导入文件。
 - [ ] 导出并排 PDF。
+- [ ] 表格单元格结构化翻译。
+- [ ] 翻译后图片叠加/重绘（实验性）。
 - [ ] 扫描版 OCR / 公式 LaTeX。
 
 ## License
