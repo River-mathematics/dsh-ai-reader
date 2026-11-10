@@ -757,23 +757,39 @@ export async function apply(ctx) {
     return () => { if (state.llm === child.llm) state.llm = null }
   })
   ctx.inject(['webServer'], (child) => {
-    const disposers = ROUTES.map((route) => child.webServer.register({
-      kind: 'exact',
-      path: route.path,
-      handler: nodeHandler(route.path),
-    }))
+    const disposers = []
+    for (const route of ROUTES) {
+      try {
+        disposers.push(child.webServer.register({
+          kind: 'exact',
+          path: route.path,
+          handler: nodeHandler(route.path),
+        }))
+      } catch (error) {
+        // A previous host instance may still own an older exact route during a
+        // hot reload. Do not fail the whole plugin; a restart will clean it.
+        console.warn('[ai-reader] route not registered', route.path, error?.message || error)
+      }
+    }
     state.webRoutes = true
     return () => { state.webRoutes = false; for (const dispose of disposers) dispose() }
   })
   ctx.inject(['connection'], (child) => {
     const conn = child.connection
     if (conn === undefined || typeof conn.registerFetchRoute !== 'function') return
-    const disposers = ROUTES.map((route) => conn.registerFetchRoute(ctx, {
-      path: route.path,
-      methods: route.methods,
-      requestBody: 'buffered',
-      fetch: fetchHandler(route.path),
-    }))
+    const disposers = []
+    for (const route of ROUTES) {
+      try {
+        disposers.push(conn.registerFetchRoute(ctx, {
+          path: route.path,
+          methods: route.methods,
+          requestBody: 'buffered',
+          fetch: fetchHandler(route.path),
+        }))
+      } catch (error) {
+        console.warn('[ai-reader] fetch route not registered', route.path, error?.message || error)
+      }
+    }
     state.connection = true
     return () => { state.connection = false; for (const dispose of disposers) dispose() }
   })
