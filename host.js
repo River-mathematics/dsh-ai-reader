@@ -116,7 +116,7 @@ function renameRecent(id, title) {
   row.title = next
   const cached = state.docs.get(id)
   if (cached) cached.title = next
-  const metaFile = join(CACHE, id, 'doc-v3.json')
+  const metaFile = join(CACHE, id, 'doc-v4.json')
   if (existsSync(metaFile)) {
     try {
       const data = JSON.parse(readFileSync(metaFile, 'utf8'))
@@ -195,7 +195,7 @@ async function openPath(path) {
   const dir = join(CACHE, id)
   ensureDir(dir)
   let data
-  const metaFile = join(dir, 'doc-v3.json')
+  const metaFile = join(dir, 'doc-v4.json')
   if (existsSync(metaFile)) {
     data = JSON.parse(readFileSync(metaFile, 'utf8'))
   } else {
@@ -224,7 +224,7 @@ async function openUpload(buffer, filename) {
     const internal = state.docs.get(doc.id)
     internal.title = nice
     doc.title = nice
-    atomicWrite(join(internal.dir, 'doc-v3.json'), JSON.stringify({ title: internal.title, pageCount: internal.pageCount, pages: internal.pages, outline: internal.outline }))
+    atomicWrite(join(internal.dir, 'doc-v4.json'), JSON.stringify({ title: internal.title, pageCount: internal.pageCount, pages: internal.pages, outline: internal.outline }))
     remember(internal)
   }
   return doc
@@ -411,6 +411,98 @@ function batchesFor(blocks, maxBlocks = 5, maxChars = 4200) {
   return out
 }
 
+function persistDocMeta(doc) {
+  atomicWrite(join(doc.dir, 'doc-v4.json'), JSON.stringify({
+    title: doc.title, pageCount: doc.pageCount, pages: doc.pages, outline: doc.outline || [],
+  }))
+}
+
+function nearestCaption(page, bbox) {
+  const [x0, y0, x1, y1] = bbox
+  const candidates = []
+  for (const block of page.blocks || []) {
+    if (block.role !== 'caption') continue
+    const bb = block.bbox
+    const overlap = Math.min(x1, bb[2]) - Math.max(x0, bb[0])
+    if (overlap < Math.min(x1 - x0, bb[2] - bb[0]) * 0.15) continue
+    const below = Math.abs(bb[1] - y1)
+    const above = Math.abs(y0 - bb[3])
+    const distance = Math.min(below, above)
+    if (distance < 180) candidates.push({ block, distance })
+  }
+  if (candidates.length === 0) return null
+  candidates.sort((a, b) => a.distance - b.distance)
+  return candidates[0].block
+}
+
+function figureLabel(text, kind, fallback) {
+  const match = String(text || '').match(/(?:figure|fig\.?|图|table|表)\s*([0-9]+(?:\.[0-9]+)?)/i)
+  if (match) return `${kind === 'table' ? '表' : '图'} ${match[1]}`
+  return `${kind === 'table' ? '表' : '图'} ${fallback}`
+}
+
+function manualAfterBlock(page, bbox) {
+  const [x0, y0, x1] = bbox
+  const boxes = (page.figures || []).map((figure) => figure.bbox).filter((box) => Array.isArray(box))
+  const inside = (block) => {
+    const x = (block.bbox[0] + block.bbox[2]) / 2
+    const y = (block.bbox[1] + block.bbox[3]) / 2
+    return boxes.some((box) => x >= box[0] && x <= box[2] && y >= box[1] && y <= box[3])
+  }
+  const candidates = (page.blocks || []).filter((block) => {
+    if (block.role === 'caption' || block.role === 'header' || block.role === 'footer') return false
+    if (block.bbox[3] > y0 + 4 || inside(block)) return false
+    if (x1 - x0 > page.width * 0.62) return true
+    return ((block.bbox[0] + block.bbox[2]) / 2 < page.width / 2) === ((x0 + x1) / 2 < page.width / 2)
+  })
+  return candidates.length ? candidates.reduce((a, b) => a.bbox[3] > b.bbox[3] ? a : b).id : null
+}
+
+async function addManualFigure(doc, pageNumber, bbox) {
+  const page = doc.pages[clamp(parseInt(pageNumber, 10), 1, doc.pageCount) - 1]
+  if (!page) throw new Error('页码无效')
+  const width = page.width
+  const height = page.height
+  let [x0, y0, x1, y1] = bbox.map((value) => Math.max(0, Math.min(1, Number(value))))
+  if (!(x1 - x0 > 0.01 && y1 - y0 > 0.01)) throw new Error('框选区域太小')
+  const points = [x0 * width, y0 * height, x1 * width, y1 * height]
+  const id = `m${Date.now().toString(36)}`
+  const name = `manual-p${String(page.page).padStart(4, '0')}-${id}.png`
+  const rel = `figures/${name}`
+  const out = join(doc.dir, rel)
+  const result = await runWorker(['crop', doc.path, String(page.page),
+    String(points[0]), String(points[1]), String(points[2]), String(points[3]), out])
+  if (!result?.ok) throw new Error(result?.error || '图表裁剪失败')
+  const caption = nearestCaption(page, points)
+  const captionText = caption ? caption.text : ''
+  const kind = /^(table|表)\s*\d+/i.test(captionText) ? 'table' : 'figure'
+  const figure = {
+    id, kind, label: figureLabel(captionText, kind, (page.figures || []).length + 1),
+    confidence: 1, bbox: points.map((v) => Math.round(v * 100) / 100),
+    width: result.width, height: result.height, file: rel,
+    captionBlockId: caption ? caption.id : null, caption: captionText,
+    afterBlockId: manualAfterBlock(page, points),
+    order: (page.figures || []).length,
+    ocr: result.ocr || [], ocrError: result.ocrError || null, source: 'manual',
+  }
+  page.figures = [...(page.figures || []), figure]
+  persistDocMeta(doc)
+  return figure
+}
+
+function removeFigure(doc, pageNumber, figureId) {
+  const page = doc.pages[clamp(parseInt(pageNumber, 10), 1, doc.pageCount) - 1]
+  if (!page) throw new Error('页码无效')
+  const figure = (page.figures || []).find((item) => item.id === figureId)
+  if (!figure) throw new Error('图表不存在')
+  page.figures = page.figures.filter((item) => item.id !== figureId)
+  if (figure.file && insidePath(resolve(doc.dir, figure.file), join(doc.dir, 'figures'))) {
+    rmSync(resolve(doc.dir, figure.file), { force: true })
+  }
+  persistDocMeta(doc)
+  return { removed: true, id: figureId }
+}
+
 async function translatePage(doc, pageNumber, target, style, force, requestedModel, glossary = []) {
   const page = doc.pages[clamp(parseInt(pageNumber, 10), 1, doc.pageCount) - 1]
   const modelName = String(requestedModel || '').trim()
@@ -537,7 +629,7 @@ async function handleCore(route, { method, query, body, headers }) {
           providers,
           defaults: { target: 'zh', style: 'academic', auto: true, model: process.env.DSH_AI_READER_MODEL || 'deepseek-flash' },
           carrier: state.connection,
-          version: '0.3.1',
+          version: '0.4.0',
         })
       }
       case '/api/ai-reader/library': {
@@ -590,6 +682,18 @@ async function handleCore(route, { method, query, body, headers }) {
         }
         return { status: 200, headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' }, body: readFileSync(abs) }
       }
+      case '/api/ai-reader/figure/manual': {
+        const payload = safeJson(body.toString('utf8'), null)
+        if (!payload || typeof payload.id !== 'string' || !Array.isArray(payload.bbox)) return errResult(400, '缺少 id 或 bbox')
+        const doc = getDoc(payload.id)
+        const figure = await addManualFigure(doc, payload.page || 1, payload.bbox)
+        return jsonResult(200, { figure })
+      }
+      case '/api/ai-reader/figure/remove': {
+        const payload = safeJson(body.toString('utf8'), null)
+        if (!payload || typeof payload.id !== 'string' || typeof payload.figureId !== 'string') return errResult(400, '缺少 id 或 figureId')
+        return jsonResult(200, removeFigure(getDoc(payload.id), payload.page || 1, payload.figureId))
+      }
       case '/api/ai-reader/translate': {
         const payload = safeJson(body.toString('utf8'), null)
         if (!payload || typeof payload.id !== 'string') return errResult(400, '缺少 id')
@@ -641,6 +745,8 @@ const ROUTES = [
   { path: '/api/ai-reader/doc', methods: ['GET'] },
   { path: '/api/ai-reader/page', methods: ['GET'] },
   { path: '/api/ai-reader/figure', methods: ['GET'] },
+  { path: '/api/ai-reader/figure/manual', methods: ['POST'] },
+  { path: '/api/ai-reader/figure/remove', methods: ['POST'] },
   { path: '/api/ai-reader/translate', methods: ['POST'] },
 ]
 

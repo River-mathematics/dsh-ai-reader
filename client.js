@@ -169,6 +169,10 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
 .air-figure-head { display: flex; align-items: center; gap: 8px; padding: 8px 11px; border-bottom: 1px solid var(--air-border); font-family: var(--air-sans); }
 .air-figure-label { color: var(--air-text); font-size: 11.5px; font-weight: 650; }
 .air-figure-kind { color: var(--air-faint); border: 1px solid var(--air-border); border-radius: 999px; padding: 1px 6px; font-size: 9.5px; }
+.air-figure-remove { margin-left: auto; border: 0; background: transparent; color: var(--air-faint); font-size: 16px; line-height: 1; padding: 2px 4px; cursor: pointer; }
+.air-figure-remove:hover { color: #b13b3b; }
+.air-figure-select-layer { position: absolute; inset: 0; z-index: 9; cursor: crosshair; background: color-mix(in srgb, var(--air-accent) 5%, transparent); touch-action: none; }
+.air-figure-select-box { position: absolute; border: 2px solid var(--air-accent); background: color-mix(in srgb, var(--air-accent) 14%, transparent); box-shadow: 0 0 0 9999px rgba(0, 0, 0, .08); }
 .air-figure-img { display: block; width: 100%; max-height: 420px; object-fit: contain; background: #fff; cursor: zoom-in; }
 .air-figure-caption { padding: 9px 11px 8px; font-family: var(--air-serif); color: var(--air-text); font-size: 13px; line-height: 1.65; }
 .air-figure-orig { margin-top: 5px; color: var(--air-faint); font-family: var(--air-sans); font-size: 10.5px; line-height: 1.55; }
@@ -579,7 +583,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
 
       bind() {
         this.shell.addEventListener('click', (event) => {
-          const target = event.target.closest('[data-act],[data-mode],[data-side-tab],[data-open-path],[data-open-id],[data-goto],[data-retranslate],[data-zoom],[data-zoom-reset]')
+          const target = event.target.closest('[data-act],[data-mode],[data-side-tab],[data-open-path],[data-open-id],[data-goto],[data-retranslate],[data-zoom],[data-zoom-reset],[data-figure-draw]')
           if (!target) return
           if (target.dataset.act === 'open') this.fileInput.click()
           else if (target.dataset.act === 'sidebar') {
@@ -595,6 +599,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
           else if (target.dataset.openId) this.openRecent(target.dataset.openId)
           else if (target.dataset.goto) this.scrollToPage(Number(target.dataset.goto))
           else if (target.dataset.retranslate) this.ensureTranslation(Number(target.dataset.retranslate), true)
+          else if (target.dataset.figureDraw) this.beginFigureDraw(Number(target.dataset.figureDraw))
           else if (target.dataset.zoomReset !== undefined) this.resetZoom()
           else if (target.dataset.zoom) this.changeZoom(target.dataset.zoom === 'in' ? 0.1 : -0.1)
         })
@@ -885,6 +890,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
       }
 
       clearDoc() {
+        this.cleanupFigureDraw()
         this.doc = null
         this.pageStatus = {}
         this.translations = {}
@@ -957,6 +963,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
       }
 
       setDoc(doc) {
+        this.cleanupFigureDraw()
         this.doc = doc
         this.pageStatus = {}
         this.translations = {}
@@ -1178,6 +1185,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
             h('button', { class: 'air-btn ghost air-zoom-btn', type: 'button', 'data-zoom': 'out', title: '缩小阅读区' }, '−'),
             h('button', { class: 'air-zoom-label', type: 'button', 'data-zoom-reset': '', title: '点击重置为 100%' }, `${Math.round(this.zoom * 100)}%`),
             h('button', { class: 'air-btn ghost air-zoom-btn', type: 'button', 'data-zoom': 'in', title: '放大阅读区' }, '+'),
+            h('button', { class: 'air-btn ghost', style: { height: '26px', padding: '0 8px', fontSize: '11px' }, 'data-figure-draw': page.page, title: '在页面上框选图表' }, '框选'),
             h('button', { class: 'air-btn ghost', style: { height: '26px', padding: '0 8px', fontSize: '11px' }, 'data-retranslate': page.page, title: '重新翻译本页' }, icon('refresh', 13), '重译'),
             blockToggle,
           )
@@ -1208,20 +1216,34 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         if (!holder) return
         holder.innerHTML = ''
         const blocks = translatableBlocks(page)
-        const figures = page.figures || []
+        const figures = [...(page.figures || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         if (blocks.length === 0 && figures.length === 0) {
           holder.append(h('div', { class: 'air-side-empty' }, '这一页主要是图表或公式，没有可翻译的正文段落。'))
           return
         }
-        const entries = blocks.map((block) => ({ kind: 'block', block }))
+        const byAnchor = new Map()
+        const unanchored = []
         for (const figure of figures) {
-          const item = { kind: 'figure', figure }
-          let index = -1
           if (figure.afterBlockId) {
-            index = entries.findIndex((entry) => entry.kind === 'block' && entry.block.id === figure.afterBlockId)
+            if (!byAnchor.has(figure.afterBlockId)) byAnchor.set(figure.afterBlockId, [])
+            byAnchor.get(figure.afterBlockId).push(figure)
+          } else {
+            unanchored.push(figure)
           }
-          if (index >= 0) entries.splice(index + 1, 0, item)
-          else entries.unshift(item)
+        }
+        const entries = unanchored.map((figure) => ({ kind: 'figure', figure }))
+        const consumed = new Set()
+        for (const block of blocks) {
+          entries.push({ kind: 'block', block })
+          for (const figure of byAnchor.get(block.id) || []) {
+            entries.push({ kind: 'figure', figure })
+            consumed.add(figure.id)
+          }
+        }
+        for (const figure of figures) {
+          if (!consumed.has(figure.id) && !unanchored.includes(figure)) {
+            entries.push({ kind: 'figure', figure })
+          }
         }
         for (const entry of entries) {
           if (entry.kind === 'figure') {
@@ -1284,6 +1306,10 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
           h('div', { class: 'air-figure-head' },
             h('span', { class: 'air-figure-label' }, figure.label || '图表'),
             h('span', { class: 'air-figure-kind' }, figure.kind === 'table' ? '表格' : '图表'),
+            h('button', {
+              class: 'air-figure-remove', type: 'button', title: '移除图表卡片',
+              onclick: (event) => { event.stopPropagation(); this.removeFigure(page.page, figure.id) },
+            }, '×'),
           ),
           image,
           captionBlock,
@@ -1315,6 +1341,108 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
             else if (status === 'error') node.textContent = '翻译失败'
             else node.textContent = '待翻译'
           })
+        }
+      }
+
+      cleanupFigureDraw() {
+        if (this.figureDrawCleanup) {
+          this.figureDrawCleanup()
+          this.figureDrawCleanup = null
+        }
+        this.shell.classList.remove('air-figure-drawing')
+      }
+
+      beginFigureDraw(pageNumber) {
+        if (!this.doc) return
+        this.cleanupFigureDraw()
+        const entry = this.pageEls.get(pageNumber)
+        if (!entry?.visual) return
+        const layer = h('div', { class: 'air-figure-select-layer' })
+        const box = h('div', { class: 'air-figure-select-box' })
+        layer.append(box)
+        entry.visual.append(layer)
+        let start = null
+        let active = true
+        const point = (event) => {
+          const rect = entry.visual.getBoundingClientRect()
+          return {
+            x: Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width))),
+            y: Math.max(0, Math.min(1, (event.clientY - rect.top) / Math.max(1, rect.height))),
+          }
+        }
+        const onMove = (event) => {
+          if (!start) return
+          const end = point(event)
+          box.style.left = `${Math.min(start.x, end.x) * 100}%`
+          box.style.top = `${Math.min(start.y, end.y) * 100}%`
+          box.style.width = `${Math.abs(end.x - start.x) * 100}%`
+          box.style.height = `${Math.abs(end.y - start.y) * 100}%`
+        }
+        const onDown = (event) => {
+          if (event.button !== 0) return
+          start = point(event)
+          box.style.left = `${start.x * 100}%`
+          box.style.top = `${start.y * 100}%`
+          box.style.width = '0'
+          box.style.height = '0'
+          layer.setPointerCapture?.(event.pointerId)
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        const onUp = (event) => {
+          if (!start) return
+          const end = point(event)
+          const bbox = [
+            Math.min(start.x, end.x), Math.min(start.y, end.y),
+            Math.max(start.x, end.x), Math.max(start.y, end.y),
+          ]
+          start = null
+          this.cleanupFigureDraw()
+          if (bbox[2] - bbox[0] > 0.02 && bbox[3] - bbox[1] > 0.02) this.addManualFigure(pageNumber, bbox)
+        }
+        const onKey = (event) => { if (event.key === 'Escape') this.cleanupFigureDraw() }
+        layer.addEventListener('pointerdown', onDown)
+        layer.addEventListener('pointermove', onMove)
+        layer.addEventListener('pointerup', onUp)
+        layer.addEventListener('pointercancel', () => this.cleanupFigureDraw())
+        document.addEventListener('keydown', onKey)
+        this.figureDrawCleanup = () => {
+          active = false
+          layer.remove()
+          document.removeEventListener('keydown', onKey)
+        }
+        this.shell.classList.add('air-figure-drawing')
+        this.toast('拖拽框选图表区域；按 Esc 取消')
+      }
+
+      async addManualFigure(pageNumber, bbox) {
+        try {
+          const value = await apiFetch('/figure/manual', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ id: this.doc.id, page: pageNumber, bbox }),
+          })
+          const page = this.doc.pages[pageNumber - 1]
+          page.figures = [...(page.figures || []), value.figure]
+          this.renderBlocks(page)
+          this.ensureTranslation(pageNumber, false)
+          this.toast('已添加图表卡片')
+        } catch (error) {
+          this.toast(String(error.message || error), true)
+        }
+      }
+
+      async removeFigure(pageNumber, figureId) {
+        try {
+          await apiFetch('/figure/remove', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ id: this.doc.id, page: pageNumber, figureId }),
+          })
+          const page = this.doc.pages[pageNumber - 1]
+          page.figures = (page.figures || []).filter((figure) => figure.id !== figureId)
+          this.renderBlocks(page)
+          this.toast('已移除图表卡片')
+        } catch (error) {
+          this.toast(String(error.message || error), true)
         }
       }
 
@@ -1674,6 +1802,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
 
       dispose() {
         this.disposed = true
+        this.cleanupFigureDraw()
         this.closeMenu()
         clearTimeout(this.searchTimer)
         if (this.activeRaf) cancelAnimationFrame(this.activeRaf)

@@ -2,9 +2,21 @@
 
 > 在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里边聊边读论文：打开 PDF，按页翻译，左侧保留原始版面，右侧逐段中英对照；也可以把译文直接覆盖在原文位置上。
 
-**版本 0.3.1** · DSH 0.2.x · MIT
+**版本 0.4.0** · DSH 0.2.x · MIT
 
 ![AI Reader 演示](docs/demo.gif)
+
+## 0.4 更新：版面模型 + 手动框选
+
+之前的图表检测是手写启发式，在矢量图、双栏和跨栏版面上会产生漏检、误检和错位。0.4 把检测换成版面模型，并加了一道人工兜底：
+
+- **DocLayout-YOLO**：检测 `figure` / `table` / `figure_caption` / `table_caption`，不再用 `find_tables()` 猜图表。
+- **宁可不出卡，也不出错卡**：低置信度、超大面积、缺少图注的区域不生成卡片。
+- **手动框选**：页头「框选」在页面图上拖一个矩形，即可把任意区域添加为图表；每张卡片也可以「×」移除。
+- **图内文字优先用 PDF 文本层**：矢量图的标签直接取 PDF 文字；只有栅格/扫描图才走 OCR。
+- **稳定排序和真实图号**：卡片按版面顺序插入，标题使用 `Figure 2.6` / `Table 2.1` 的真实编号，不再用检测序号颠倒顺序。
+
+> 模型约 75 MB，不随仓库提交。安装方法见下面的「安装」章节；没装模型时不会自动出图表卡片，但仍可用「框选」手动添加。
 
 ## 0.3 更新：图表回到译文栏，图中文字可查
 
@@ -79,7 +91,8 @@
 | 模型 | `deepseek-flash` / `deepseek-v4-pro` 切换，缓存按模型隔离 |
 | 术语表 | 每行 `原文=译文`，保存后按术语重译，缓存按术语表哈希隔离 |
 | 文内搜索 | 搜索原文/译文，跳转到对应段落 |
-| 图表 | 按阅读顺序在译文栏插入图/表卡片，图注翻译 |
+| 图表 | 版面模型检测 figure/table/caption，按阅读顺序插入卡片；低置信度不生成 |
+| 手动框选 | 页头「框选」可在页面图上拖矩形添加图表；卡片可移除 |
 | 图中文字 | OCR 后提供双语列表；纯数字刻度会跳过 |
 | 缩放 | 整体缩放阅读区：`Ctrl+滚轮`、页头 `−/+`、`Ctrl+0` 重置；原文/译文/图表一起缩放 |
 | 导出 | 当前文档已翻译内容和图中文字导出为 Markdown |
@@ -147,6 +160,15 @@ python -m pip install -r worker/requirements.txt
 ```bash
 python -m pip install -r worker/requirements-ocr.txt
 ```
+
+要启用自动图表检测，再安装版面模型依赖并下载模型：
+
+```bash
+python -m pip install -r worker/requirements-layout.txt
+python worker/models/download.py
+```
+
+模型约 75 MB，不提交到仓库。没有模型时不会自动生成图表卡片；仍可用页头「框选」手动添加。
 
 ### 3. 安装到 DSH profile
 
@@ -231,8 +253,11 @@ index.js                宿主入口（薄加载层）
 host.js                 HTTP 路由与翻译编排
 client.js               DSH 客户端插件 bundle
 worker/main.py          PyMuPDF 提取/渲染 worker
+worker/layout.py        DocLayout-YOLO 版面检测
+worker/models/           模型下载脚本与说明（onnx 不提交）
 worker/requirements.txt Python 依赖
 worker/requirements-ocr.txt 可选 OCR 依赖
+worker/requirements-layout.txt 可选版面模型依赖
 cordis.patch.yml        DSH bundle patch
 docs/                   README 截图
 ```
@@ -250,14 +275,15 @@ docs/                   README 截图
 - **公式**：复杂公式可能被拆成多个文本块；这些块会跳过翻译，但原文仍显示在页面图上。
 - **表格**：以表格截图 + 图注为准，不逐单元格重排；OCR 列表也不保留表格行列结构。
 - **图中文字 OCR**：best-effort；纯数字刻度会被跳过，斜体、公式、密集坐标轴和低分辨率截图可能识别错误。
-- **图表检测**：PDF 里的图形没有统一语义，极少数纯矢量图或跨栏组合图可能漏检或合并过大。
+- **图表检测**：需要安装 DocLayout-YOLO 模型；模型仍可能漏检或把复杂跨栏图拆开，此时用页头「框选」修正。没有模型时不会自动出卡片。
+- **模型依赖**：ONNX 模型约 75 MB，首次加载需要几秒；209 页的书首次提取会明显变慢，之后命中缓存。
 - **延迟**：首次打开一页通常需要几秒（取决于模型）；OCR 会额外增加首次提取时间，命中缓存后很快。
 - **翻译质量**：取决于 DSH 当前账号可用的模型；可以在阅读器里切换 `deepseek-flash` / `deepseek-v4-pro`。
 - **右侧栏是 Session 级的**：切换对话 Session 时阅读器 tab 不会跟随；打开同一 Session 会保留。需要跨 Session 时可使用左侧栏的全屏阅读。
 - **导出范围**：Markdown 导出包含当前文档所有已翻译段落、图注和 OCR 文本；未翻译段落只保留原文。暂不支持导出 PDF 或把图片嵌入 Markdown。
 - **引用到对话**：插入当前输入框光标位置；如果编辑器不可写，会退化为复制到剪贴板。
 
-> PyMuPDF 由用户通过 `worker/requirements.txt` 单独安装，遵循其 AGPL / 商业许可；RapidOCR 通过 `worker/requirements-ocr.txt` 可选安装。本仓库不打包这两个依赖。
+> PyMuPDF 由用户通过 `worker/requirements.txt` 单独安装，遵循其 AGPL / 商业许可；RapidOCR 通过 `worker/requirements-ocr.txt` 可选安装；DocLayout-YOLO 通过 `worker/requirements-layout.txt` 和 `worker/models/download.py` 可选安装。本仓库不打包这些依赖或模型。
 
 ## 开发
 
@@ -274,6 +300,14 @@ python -m py_compile worker/main.py
 客户端是手写的 CJS 风格 bundle，外层包装为 `window.__ModuleLoader__.load(...)`；修改 `client.js` 后刷新 DSH 页面即可加载新 bundle。宿主侧 `index.js` 通过带时间戳的动态 import 加载 `host.js`，便于在开发时通过插件重载更新路由。
 
 ## 更新日志
+
+### 0.4.0
+
+- 图表检测改用 DocLayout-YOLO（figure/table/caption + confidence），移除不可靠的 `find_tables()` 自动卡片。
+- 低置信度/异常区域不再生成卡片；页头新增「框选」手动添加图表，卡片可移除。
+- 图内文字优先读取 PDF 文本层，OCR 只作为矢量图没有文本层时的兜底。
+- 使用真实图号（Figure 2.6 / Table 2.1）并修复多图页的卡片顺序。
+- 缓存升级为 `doc-v4.json`，旧文档重新打开时按新模型重建。
 
 ### 0.3.1
 
@@ -314,6 +348,7 @@ python -m py_compile worker/main.py
 - [x] 模型选择器（`deepseek-flash` / `deepseek-v4-pro`）。
 - [x] 文内搜索、页面缩放、段落高亮、Markdown 导出。
 - [x] 图表卡片、图注翻译、图中文字 OCR 列表。
+- [x] DocLayout-YOLO 版面检测 + 手动框选修正。
 - [ ] 术语表 `locked` 语法与导入文件。
 - [ ] 导出并排 PDF。
 - [ ] 表格单元格结构化翻译。

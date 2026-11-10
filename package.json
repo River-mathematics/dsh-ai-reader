@@ -1,6 +1,6 @@
 {
   "name": "dsh-ai-reader",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "AI 阅读：在 DeepSeek Harness 中打开 PDF，按页翻译，支持中英对照与沉浸式译文覆盖。",
   "license": "MIT",
   "author": "River-mathematics",
@@ -36,8 +36,12 @@
     "client.js",
     "cordis.patch.yml",
     "worker/main.py",
+    "worker/layout.py",
     "worker/requirements.txt",
     "worker/requirements-ocr.txt",
+    "worker/requirements-layout.txt",
+    "worker/models/README.md",
+    "worker/models/download.py",
     "docs",
     "README.md",
     "LICENSE"

@@ -333,7 +333,197 @@ def _cluster_shapes(shapes: list[pymupdf.Rect], caption: pymupdf.Rect, table: bo
     return selected
 
 
+_LAYOUT_DETECTOR = None
+
+
+def layout_detector():
+    global _LAYOUT_DETECTOR
+    if _LAYOUT_DETECTOR is None:
+        try:
+            from layout import LayoutDetector
+            _LAYOUT_DETECTOR = LayoutDetector()
+        except Exception:  # noqa: BLE001
+            _LAYOUT_DETECTOR = None
+    return _LAYOUT_DETECTOR
+
+
+def _inside_boxes(block: dict, boxes: list[list[float]]) -> bool:
+    x = (block["bbox"][0] + block["bbox"][2]) / 2
+    y = (block["bbox"][1] + block["bbox"][3]) / 2
+    return any(box[0] <= x <= box[2] and box[1] <= y <= box[3] for box in boxes)
+
+
+def _caption_label(text: str, kind: str, index: int) -> str:
+    match = re.search(r"(?:figure|fig\.?|图|table|表)\s*([0-9]+(?:\.[0-9]+)?)", text or "", re.I)
+    if match:
+        return f"{'表' if kind == 'table' else '图'} {match.group(1)}"
+    return f"{'表' if kind == 'table' else '图'} {index}"
+
+
+def _text_inside(blocks: list[dict], rect: pymupdf.Rect, caption_id: str | None) -> list[dict]:
+    lines = []
+    for block in blocks:
+        if block.get("id") == caption_id or block.get("role") == "caption":
+            continue
+        x0, y0, x1, y1 = block["bbox"]
+        x = (x0 + x1) / 2
+        y = (y0 + y1) / 2
+        if not (rect.x0 <= x <= rect.x1 and rect.y0 <= y <= rect.y1):
+            continue
+        text = str(block.get("text") or "").strip()
+        if len(text) < 2 or re.fullmatch(r"[\d\s.,%+\-−–—/()]+", text):
+            continue
+        lines.append({
+            "text": text,
+            "confidence": 1.0,
+            "bbox": [
+                round((x0 - rect.x0) / max(1.0, rect.width), 4),
+                round((y0 - rect.y0) / max(1.0, rect.height), 4),
+                round((x1 - x0) / max(1.0, rect.width), 4),
+                round((y1 - y0) / max(1.0, rect.height), 4),
+            ],
+        })
+    return lines
+
+
+def page_figures_layout(page: pymupdf.Page, blocks: list[dict], fig_dir: str, page_number: int) -> list[dict]:
+    detector = layout_detector()
+    if detector is None or not detector.available:
+        return []
+    width = float(page.rect.width)
+    height = float(page.rect.height)
+    page_area = max(1.0, width * height)
+    boxes = detector.detect_page(page, 2.0)
+    captions = [box for box in boxes if box["kind"] in {"figure_caption", "table_caption"}]
+    regions = [
+        box for box in boxes
+        if box["kind"] in {"figure", "table"} and box["confidence"] >= 0.45
+    ]
+    regions = [
+        box for box in regions
+        if 0.004 <= _area(pymupdf.Rect(box["bbox"])) / page_area <= 0.68
+    ]
+    regions.sort(key=lambda box: (box["bbox"][1], box["bbox"][0]))
+
+    # Merge duplicate boxes of the same kind.
+    merged: list[dict] = []
+    for box in regions:
+        rect = pymupdf.Rect(box["bbox"])
+        duplicate = None
+        for existing in merged:
+            old = pymupdf.Rect(existing["bbox"])
+            if existing["kind"] == box["kind"] and _intersection(rect, old) / max(1.0, min(_area(rect), _area(old))) > 0.55:
+                duplicate = existing
+                break
+        if duplicate is None:
+            merged.append(box)
+        else:
+            duplicate["bbox"] = [
+                min(duplicate["bbox"][0], box["bbox"][0]),
+                min(duplicate["bbox"][1], box["bbox"][1]),
+                max(duplicate["bbox"][2], box["bbox"][2]),
+                max(duplicate["bbox"][3], box["bbox"][3]),
+            ]
+            duplicate["confidence"] = max(duplicate["confidence"], box["confidence"])
+
+    figure_boxes = [box["bbox"] for box in merged]
+    figures: list[dict] = []
+    for index, box in enumerate(merged):
+        rect = pymupdf.Rect(box["bbox"]) & page.rect
+        if rect.width < 40 or rect.height < 30:
+            continue
+        kind = "table" if box["kind"] == "table" else "figure"
+        # Find a model caption box nearest this region.
+        caption_box = None
+        caption_distance = 1e9
+        for cap in captions:
+            cr = pymupdf.Rect(cap["bbox"])
+            x_overlap = min(rect.x1, cr.x1) - max(rect.x0, cr.x0)
+            if x_overlap < min(rect.width, cr.width) * 0.20:
+                continue
+            below = -30 <= cr.y0 - rect.y1 <= 180
+            above = -30 <= rect.y0 - cr.y1 <= 180
+            if not (below or above):
+                continue
+            distance = abs(cr.y0 - rect.y1) if below else abs(rect.y0 - cr.y1)
+            if distance < caption_distance:
+                caption_distance = distance
+                caption_box = cr
+
+        caption_block = None
+        if caption_box is not None:
+            candidates = []
+            for block in blocks:
+                if block.get("role") != "caption":
+                    continue
+                bb = pymupdf.Rect(block["bbox"])
+                overlap = _intersection(bb, caption_box)
+                if overlap > 0:
+                    candidates.append((overlap, block))
+            if candidates:
+                caption_block = max(candidates, key=lambda item: item[0])[1]
+        if caption_block is None:
+            candidates = []
+            for block in blocks:
+                if block.get("role") != "caption":
+                    continue
+                bb = pymupdf.Rect(block["bbox"])
+                distance = min(abs(bb.y0 - rect.y1), abs(rect.y0 - bb.y1))
+                if distance < 180 and min(bb.x1, rect.x1) - max(bb.x0, rect.x0) > 15:
+                    candidates.append((distance, block))
+            if candidates:
+                caption_block = min(candidates, key=lambda item: item[0])[1]
+
+        caption = str(caption_block.get("text") or "").strip() if caption_block else ""
+        label = _caption_label(caption, kind, index + 1)
+        figure_id = f"f{index + 1}"
+        image_name = f"p{page_number:04d}-{figure_id}.png"
+        image_path = os.path.join(fig_dir, image_name)
+        try:
+            pix = page.get_pixmap(clip=rect, matrix=pymupdf.Matrix(2.6, 2.6), alpha=False, annots=True)
+            pix.save(image_path)
+        except Exception:  # noqa: BLE001
+            continue
+
+        lines = _text_inside(blocks, rect, caption_block["id"] if caption_block else None)
+        ocr_error = None
+        if len(lines) < 2:
+            lines, ocr_error = ocr_figure(image_path, pix.width, pix.height)
+
+        outside = [block for block in blocks if not _inside_boxes(block, figure_boxes)
+                   and block.get("role") not in {"header", "footer", "caption"}]
+        above = [block for block in outside if block["bbox"][3] <= rect.y0 + 4]
+        column = _column(rect, width)
+        if rect.width <= width * 0.62:
+            above = [block for block in above if _column(pymupdf.Rect(block["bbox"]), width) == column]
+        after = max(above, key=lambda block: block["bbox"][3]) if above else None
+
+        figures.append({
+            "id": figure_id,
+            "kind": kind,
+            "label": label,
+            "confidence": round(float(box["confidence"]), 3),
+            "bbox": [round(rect.x0, 2), round(rect.y0, 2), round(rect.x1, 2), round(rect.y1, 2)],
+            "width": pix.width,
+            "height": pix.height,
+            "file": f"figures/{image_name}",
+            "captionBlockId": caption_block["id"] if caption_block else None,
+            "caption": caption,
+            "afterBlockId": after["id"] if after else None,
+            "order": index,
+            "ocr": lines[:60],
+            "ocrError": ocr_error,
+            "source": "layout",
+        })
+    return figures
+
+
 def page_figures(page: pymupdf.Page, blocks: list[dict], fig_dir: str, page_number: int) -> list[dict]:
+    """Prefer the layout model; never fall back to the old unreliable heuristic."""
+    return page_figures_layout(page, blocks, fig_dir, page_number)
+
+
+def page_figures_heuristic(page: pymupdf.Page, blocks: list[dict], fig_dir: str, page_number: int) -> list[dict]:
     """Find figure/table regions, crop them and OCR their text."""
     width = float(page.rect.width)
     height = float(page.rect.height)
@@ -566,6 +756,24 @@ def render(pdf_path: str, page_number: str, zoom: str, out_path: str) -> dict:
     return {"ok": True, "page": index + 1, "width": pix.width, "height": pix.height}
 
 
+def crop(pdf_path: str, page_number: str, x0: str, y0: str, x1: str, y1: str, out_path: str) -> dict:
+    doc = pymupdf.open(pdf_path)
+    index = max(0, min(len(doc) - 1, int(page_number) - 1))
+    page = doc[index]
+    rect = pymupdf.Rect(float(x0), float(y0), float(x1), float(y1)) & page.rect
+    if rect.width < 8 or rect.height < 8:
+        return {"ok": False, "error": "selection is too small"}
+    pix = page.get_pixmap(clip=rect, matrix=pymupdf.Matrix(2.6, 2.6), alpha=False, annots=True)
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    pix.save(out_path)
+    blocks = page_blocks(page)
+    lines = _text_inside(blocks, rect, None)
+    ocr_error = None
+    if len(lines) < 2:
+        lines, ocr_error = ocr_figure(out_path, pix.width, pix.height)
+    return {"ok": True, "width": pix.width, "height": pix.height, "ocr": lines[:60], "ocrError": ocr_error}
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -575,8 +783,10 @@ def main() -> int:
             result = extract(sys.argv[2], sys.argv[3])
         elif command == "render" and len(sys.argv) >= 6:
             result = render(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
+        elif command == "crop" and len(sys.argv) >= 9:
+            result = crop(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8])
         else:
-            result = {"ok": False, "error": "usage: main.py extract <pdf> <out.json> | render <pdf> <page> <zoom> <out.png>"}
+            result = {"ok": False, "error": "usage: main.py extract <pdf> <out.json> | render <pdf> <page> <zoom> <out.png> | crop <pdf> <page> <x0> <y0> <x1> <y1> <out.png>"}
     except Exception as error:  # noqa: BLE001 - the protocol needs a JSON error
         result = {"ok": False, "error": f"{type(error).__name__}: {error}"}
     print(json.dumps(result, ensure_ascii=False))
