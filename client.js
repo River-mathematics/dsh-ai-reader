@@ -222,7 +222,8 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
 .air-search-snippet { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--air-muted); }
 .air-search-empty { padding: 8px; color: var(--air-faint); font-size: 11px; }
 .air-zoom-btn { height: 24px; min-width: 24px; padding: 0 6px; font-size: 13px; line-height: 1; }
-.air-zoom-label { color: var(--air-faint); font-size: 10.5px; min-width: 32px; text-align: center; }
+.air-zoom-label { color: var(--air-faint); background: transparent; border: 0; padding: 0 2px; font: inherit; font-size: 10.5px; min-width: 32px; text-align: center; cursor: pointer; }
+.air-zoom-label:hover { color: var(--air-accent); }
 .air-visual-wrap { overflow: auto; overscroll-behavior: contain; }
 .air-bbox-highlight { position: absolute; z-index: 3; display: none; pointer-events: none; border: 2px solid var(--air-accent); background: color-mix(in srgb, var(--air-accent) 10%, transparent); border-radius: 2px; }
 .air-block-hit { animation: airHit 3s ease; }
@@ -383,6 +384,31 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
     }
 
     const TRANSLATABLE = new Set(['body', 'heading', 'caption'])
+    const CONTENT_ZOOM_KEY = 'dsh-ai-reader:content-zoom'
+
+    function contentZoomLimits(hostMode) {
+      return hostMode === 'sidebar' ? [0.75, 1.4] : [0.75, 1.75]
+    }
+
+    function contentZoomKey(hostMode) {
+      return `${CONTENT_ZOOM_KEY}:${hostMode}`
+    }
+
+    function clampContentZoom(value, hostMode) {
+      const [min, max] = contentZoomLimits(hostMode)
+      const number = Number(value)
+      if (!Number.isFinite(number) || number <= 0) return 1
+      return Math.round(Math.min(max, Math.max(min, number)) * 100) / 100
+    }
+
+    function loadContentZoom(hostMode) {
+      try {
+        return clampContentZoom(localStorage.getItem(contentZoomKey(hostMode)), hostMode)
+      } catch {
+        return 1
+      }
+    }
+
     function translatableBlocks(page) {
       const figures = page?.figures || []
       const figureCaptions = new Set(figures.map((figure) => figure.captionBlockId).filter(Boolean))
@@ -418,7 +444,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         this.target = 'zh'
         this.style = 'academic'
         this.model = ''
-        this.zoom = 1
+        this.zoom = loadContentZoom(this.hostMode)
         this.glossary = loadGlossary()
         this.auto = true
         this.txtOnly = false
@@ -526,6 +552,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
             h('input', { type: 'checkbox', 'data-auto': '', checked: true }),
             '自动翻译可见页',
           ),
+          h('span', { 'data-foot-zoom': '' }, '缩放 100%'),
           h('span', { 'data-foot-model': '' }, ''),
         )
 
@@ -536,6 +563,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
           doclist: this.shell.querySelector('[data-doclist]'),
           toast: this.shell.querySelector('[data-toast]'),
           footLeft: this.shell.querySelector('[data-foot-left]'),
+          footZoom: this.shell.querySelector('[data-foot-zoom]'),
           footModel: this.shell.querySelector('[data-foot-model]'),
           search: this.shell.querySelector('[data-search]'),
           loading: null,
@@ -546,11 +574,12 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
 
         this.bind()
         this.loading = null
+        if (this.el.footZoom) this.el.footZoom.textContent = `缩放 ${Math.round(this.zoom * 100)}%`
       }
 
       bind() {
         this.shell.addEventListener('click', (event) => {
-          const target = event.target.closest('[data-act],[data-mode],[data-side-tab],[data-open-path],[data-open-id],[data-goto],[data-retranslate],[data-zoom]')
+          const target = event.target.closest('[data-act],[data-mode],[data-side-tab],[data-open-path],[data-open-id],[data-goto],[data-retranslate],[data-zoom],[data-zoom-reset]')
           if (!target) return
           if (target.dataset.act === 'open') this.fileInput.click()
           else if (target.dataset.act === 'sidebar') {
@@ -566,8 +595,31 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
           else if (target.dataset.openId) this.openRecent(target.dataset.openId)
           else if (target.dataset.goto) this.scrollToPage(Number(target.dataset.goto))
           else if (target.dataset.retranslate) this.ensureTranslation(Number(target.dataset.retranslate), true)
-          else if (target.dataset.zoom) this.changeZoom(target.dataset.zoom === 'in' ? 0.25 : -0.25)
+          else if (target.dataset.zoomReset !== undefined) this.resetZoom()
+          else if (target.dataset.zoom) this.changeZoom(target.dataset.zoom === 'in' ? 0.1 : -0.1)
         })
+        this.el.scroll.addEventListener('wheel', (event) => {
+          if (!event.ctrlKey || !this.el.scroll.contains(event.target)) return
+          event.preventDefault()
+          event.stopPropagation()
+          this.changeZoom(event.deltaY < 0 ? 0.1 : -0.1)
+        }, { passive: false, capture: true })
+        this.onZoomKey = (event) => {
+          if (!event.ctrlKey) return
+          const active = document.activeElement
+          if (!this.shell.contains(active) && !this.shell.matches(':hover')) return
+          if (event.key === '0') {
+            event.preventDefault()
+            this.resetZoom()
+          } else if (event.key === '+' || event.key === '=') {
+            event.preventDefault()
+            this.changeZoom(0.1)
+          } else if (event.key === '-') {
+            event.preventDefault()
+            this.changeZoom(-0.1)
+          }
+        }
+        document.addEventListener('keydown', this.onZoomKey)
         this.fileInput.addEventListener('change', () => {
           const file = this.fileInput.files?.[0]
           if (file) this.upload(file)
@@ -1123,9 +1175,9 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
             h('span', { class: 'air-page-no' }, `Page ${page.page}`),
             chip,
             h('span', { class: 'air-page-spacer' }),
-            h('button', { class: 'air-btn ghost air-zoom-btn', type: 'button', 'data-zoom': 'out', title: '缩小页面' }, '−'),
-            h('span', { class: 'air-zoom-label' }, `${Math.round(this.zoom * 100)}%`),
-            h('button', { class: 'air-btn ghost air-zoom-btn', type: 'button', 'data-zoom': 'in', title: '放大页面' }, '+'),
+            h('button', { class: 'air-btn ghost air-zoom-btn', type: 'button', 'data-zoom': 'out', title: '缩小阅读区' }, '−'),
+            h('button', { class: 'air-zoom-label', type: 'button', 'data-zoom-reset': '', title: '点击重置为 100%' }, `${Math.round(this.zoom * 100)}%`),
+            h('button', { class: 'air-btn ghost air-zoom-btn', type: 'button', 'data-zoom': 'in', title: '放大阅读区' }, '+'),
             h('button', { class: 'air-btn ghost', style: { height: '26px', padding: '0 8px', fontSize: '11px' }, 'data-retranslate': page.page, title: '重新翻译本页' }, icon('refresh', 13), '重译'),
             blockToggle,
           )
@@ -1138,9 +1190,10 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
           const blocks = h('div', { class: 'air-blocks' })
           const wrap = h('div', { class: 'air-visual-wrap' }, visual)
           const grid = h('div', { class: 'air-page-grid' }, wrap, blocks)
-          section.append(header, grid)
+          const scale = h('div', { class: 'air-page-scale' }, header, grid)
+          section.append(scale)
           this.el.scroll.append(section)
-          this.pageEls.set(page.page, { section, image, loading, overlay, blocks, chip, visual, wrap, bbox })
+          this.pageEls.set(page.page, { section, scale, image, loading, overlay, blocks, chip, visual, wrap, bbox })
           this.renderBlocks(page)
           this.observer.observe(section)
           image.addEventListener('load', () => { loading.style.display = 'none'; this.updateOverlay(page.page) })
@@ -1350,18 +1403,58 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
       }
 
       changeZoom(delta) {
-        this.zoom = Math.min(2.5, Math.max(1, Math.round((this.zoom + delta) * 4) / 4))
+        const [min, max] = contentZoomLimits(this.hostMode)
+        const next = clampContentZoom(this.zoom + delta, this.hostMode)
+        if (next === this.zoom || next < min || next > max) return
+        const anchor = this.captureZoomAnchor()
+        const previous = this.zoom
+        this.zoom = next
         this.applyZoom()
+        this.restoreZoomAnchor(anchor, previous)
+      }
+
+      resetZoom() {
+        if (this.zoom === 1) return
+        const anchor = this.captureZoomAnchor()
+        const previous = this.zoom
+        this.zoom = 1
+        this.applyZoom()
+        this.restoreZoomAnchor(anchor, previous)
+      }
+
+      captureZoomAnchor() {
+        const page = this.activePage || 1
+        const section = this.pageEls.get(page)?.section
+        if (!section) return null
+        return { page, offset: this.el.scroll.scrollTop - section.offsetTop }
+      }
+
+      restoreZoomAnchor(anchor, previousZoom) {
+        if (!anchor) return
+        const ratio = this.zoom / (previousZoom || 1)
+        const apply = () => {
+          const section = this.pageEls.get(anchor.page)?.section
+          if (!section) return
+          this.el.scroll.style.scrollBehavior = 'auto'
+          this.el.scroll.scrollTop = section.offsetTop + anchor.offset * ratio
+          this.el.scroll.style.scrollBehavior = ''
+        }
+        requestAnimationFrame(() => requestAnimationFrame(apply))
       }
 
       applyZoom() {
+        this.shell.style.setProperty('--air-content-zoom', String(this.zoom))
         for (const entry of this.pageEls.values()) {
-          if (entry.visual) entry.visual.style.width = `${this.zoom * 100}%`
-          if (entry.wrap) entry.wrap.style.overflow = this.zoom > 1 ? 'auto' : ''
+          if (entry.section) entry.section.style.zoom = String(this.zoom)
+          if (entry.scale) entry.scale.style.zoom = ''
+          if (entry.visual) entry.visual.style.width = ''
+          if (entry.wrap) entry.wrap.style.overflow = ''
         }
         for (const label of this.shell.querySelectorAll('.air-zoom-label')) {
           label.textContent = `${Math.round(this.zoom * 100)}%`
         }
+        if (this.el.footZoom) this.el.footZoom.textContent = `缩放 ${Math.round(this.zoom * 100)}%`
+        try { localStorage.setItem(contentZoomKey(this.hostMode), String(this.zoom)) } catch { /* ignore */ }
       }
 
       showBbox(pageNumber, block) {
@@ -1585,6 +1678,7 @@ body[data-ds-dark-theme] .air-chip.error { color: #f09a9a; background: #2c1e1e; 
         clearTimeout(this.searchTimer)
         if (this.activeRaf) cancelAnimationFrame(this.activeRaf)
         this.pendingTranslations.clear()
+        if (this.onZoomKey) document.removeEventListener('keydown', this.onZoomKey)
         if (this.observer) this.observer.disconnect()
         for (const url of this.pageObjects.values()) URL.revokeObjectURL(url)
         this.pageObjects.clear()

@@ -537,7 +537,7 @@ async function handleCore(route, { method, query, body, headers }) {
           providers,
           defaults: { target: 'zh', style: 'academic', auto: true, model: process.env.DSH_AI_READER_MODEL || 'deepseek-flash' },
           carrier: state.connection,
-          version: '0.3.0',
+          version: '0.3.1',
         })
       }
       case '/api/ai-reader/library': {
